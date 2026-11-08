@@ -24,6 +24,13 @@
 #define FIMS_MAX_EXCLUDES       64
 #define FIMS_MAX_LINE           8192
 #define FIMS_BASELINE_MAGIC     "FIMS_BASELINE_V1"
+#define FIMS_MAX_SCAN_DEPTH     128
+
+/* Exit Codes */
+#define FIMS_EXIT_OK      0
+#define FIMS_EXIT_ERROR   1
+#define FIMS_EXIT_CORRUPT 2
+#define FIMS_EXIT_CHANGES 3
 
 /* Default paths relative to working directory (or overridden via config/env) */
 #define FIMS_DEFAULT_BASELINE   "data/baseline.dat"
@@ -103,7 +110,8 @@ typedef enum {
     EVENT_FILE_RENAMED,
     EVENT_PERMISSION_CHANGED,
     EVENT_SIZE_CHANGED,
-    EVENT_METADATA_CHANGED
+    EVENT_METADATA_CHANGED,
+    EVENT_UNREADABLE
 } fims_event_type_t;
 
 #define FIMS_FLAG_NONE               0x00U
@@ -114,6 +122,7 @@ typedef enum {
 #define FIMS_FLAG_PERMISSION_CHANGED (1U << 4)
 #define FIMS_FLAG_SIZE_CHANGED       (1U << 5)
 #define FIMS_FLAG_METADATA_CHANGED   (1U << 6)
+#define FIMS_FLAG_UNREADABLE         (1U << 7)
 
 /* ============================================================================
  * Alert Severity Levels
@@ -153,6 +162,7 @@ typedef struct {
     int64_t  mtime;
     int64_t  ctime;
     char     sha256[FIMS_HASH_HEX_LEN];
+    bool     unreadable;
 } fims_file_record_t;
 
 /**

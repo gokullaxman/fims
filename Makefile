@@ -13,15 +13,14 @@ CORE_SRCS = $(SRCDIR)/config.c \
             $(SRCDIR)/baseline.c \
             $(SRCDIR)/integrity.c \
             $(SRCDIR)/monitor.c \
+            $(SRCDIR)/escape.c \
             $(SRCDIR)/cli.c
 
 CORE_OBJS = $(CORE_SRCS:.c=.o)
 MAIN_OBJ  = $(SRCDIR)/main.o
 
-TEST_BINS = $(TESTDIR)/test_hash \
-            $(TESTDIR)/test_scanner \
-            $(TESTDIR)/test_baseline \
-            $(TESTDIR)/test_integrity
+TEST_SRCS = $(wildcard $(TESTDIR)/test_*.c)
+TEST_BINS = $(TEST_SRCS:.c=)
 
 .PHONY: all clean test dirs
 
@@ -36,28 +35,18 @@ $(TARGET): $(CORE_OBJS) $(MAIN_OBJ)
 $(SRCDIR)/%.o: $(SRCDIR)/%.c include/fims.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(TESTDIR)/test_hash: $(TESTDIR)/test_hash.c $(CORE_OBJS)
-	$(CC) $(CFLAGS) -o $@ $< $(CORE_OBJS) $(LDFLAGS)
-
-$(TESTDIR)/test_scanner: $(TESTDIR)/test_scanner.c $(CORE_OBJS)
-	$(CC) $(CFLAGS) -o $@ $< $(CORE_OBJS) $(LDFLAGS)
-
-$(TESTDIR)/test_baseline: $(TESTDIR)/test_baseline.c $(CORE_OBJS)
-	$(CC) $(CFLAGS) -o $@ $< $(CORE_OBJS) $(LDFLAGS)
-
-$(TESTDIR)/test_integrity: $(TESTDIR)/test_integrity.c $(CORE_OBJS)
+$(TESTDIR)/test_%: $(TESTDIR)/test_%.c $(CORE_OBJS)
 	$(CC) $(CFLAGS) -o $@ $< $(CORE_OBJS) $(LDFLAGS)
 
 test: all $(TEST_BINS)
 	@echo "============================================================"
 	@echo " Executing FIMS Automated Security & Integrity Test Suite"
 	@echo "============================================================"
-	./$(TESTDIR)/test_hash
-	./$(TESTDIR)/test_scanner
-	./$(TESTDIR)/test_baseline
-	./$(TESTDIR)/test_integrity
+	@for t in $(TEST_BINS); do \
+		./$$t || exit 1; \
+	done
 	@echo "============================================================"
-	@echo " ALL 4 TEST SUITES (12 TEST REQUIREMENTS) PASSED CLEANLY"
+	@echo " ALL TEST SUITES PASSED CLEANLY"
 	@echo "============================================================"
 
 clean:
