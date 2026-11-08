@@ -1,0 +1,18 @@
+# Compiled binaries and object files
+fims
+src/*.o
+tests/test_hash
+tests/test_scanner
+tests/test_baseline
+tests/test_integrity
+
+# Runtime state, baselines, and logs
+data/*.dat
+data/*.conf
+data/*.tmp*
+logs/*.log
+
+# Editor & OS artifacts
+*.swp
+*~
+.DS_Store
