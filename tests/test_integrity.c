@@ -12,6 +12,7 @@
 #include <utime.h>
 #include <pthread.h>
 #include <time.h>
+#include <limits.h>
 #include <sys/stat.h>
 
 static void sleep_ms_test(long ms) {
@@ -46,8 +47,54 @@ static void *monitor_worker_thread(void *arg) {
     return NULL;
 }
 
+static void test_default_exclusions_init_scan(void) {
+    char dir_template[] = "/tmp/fims_test_defex_XXXXXX";
+    char *test_dir = mkdtemp(dir_template);
+    assert(test_dir != NULL);
+
+    char sub_data[FIMS_MAX_PATH];
+    char sub_logs[FIMS_MAX_PATH];
+    assert(fims_path_join(sub_data, sizeof(sub_data), test_dir, "data"));
+    assert(fims_path_join(sub_logs, sizeof(sub_logs), test_dir, "logs"));
+    assert(mkdir(sub_data, 0755) == 0);
+    assert(mkdir(sub_logs, 0755) == 0);
+
+    char old_cwd[PATH_MAX];
+    assert(getcwd(old_cwd, sizeof(old_cwd)) != NULL);
+    assert(chdir(test_dir) == 0);
+
+    fims_config_t cfg;
+    fims_config_init_defaults(&cfg);
+
+    size_t count = 0;
+    assert(fims_baseline_init_from_dir(test_dir, &cfg, false, &count) == FIMS_OK);
+    assert(fims_config_save(&cfg, NULL) == FIMS_OK);
+    assert(fims_status_save(cfg.state_file, &cfg, NULL, count, 0) == FIMS_OK);
+
+    fims_file_list_t baseline;
+    assert(fims_baseline_load(cfg.baseline_file, &baseline) == FIMS_OK);
+    fims_file_list_t current;
+    assert(fims_file_list_init(&current) == FIMS_OK);
+    assert(fims_scan_directory(test_dir, &cfg, &current) == FIMS_OK);
+
+    fims_report_t report;
+    assert(fims_report_init(&report) == FIMS_OK);
+    assert(fims_check_integrity(&baseline, &current, &cfg, false, &report) == FIMS_OK);
+
+    assert(report.count == 0);
+    printf("  [PASS] Default exclusions matched (init with data/ and logs/, 0 alerts on scan)\n");
+
+    fims_report_free(&report);
+    fims_file_list_free(&current);
+    fims_file_list_free(&baseline);
+
+    assert(chdir(old_cwd) == 0);
+}
+
 int main(void) {
     printf("[TEST SUITE] Running test_integrity (including real-time monitor interruption test)...\n");
+
+    test_default_exclusions_init_scan();
 
     char dir_template[] = "/tmp/fims_test_integrity_XXXXXX";
     char *test_dir = mkdtemp(dir_template);

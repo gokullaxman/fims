@@ -220,6 +220,7 @@ typedef struct {
     char                baseline_file[FIMS_MAX_PATH];
     char                report_file[FIMS_MAX_PATH];
     char                state_file[FIMS_MAX_PATH];
+    char                config_file[FIMS_MAX_PATH];
     fims_monitor_mode_t monitor_mode;
     fims_severity_t     min_alert_severity;
     uint32_t            alert_threshold_count;

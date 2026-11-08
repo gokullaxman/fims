@@ -102,15 +102,17 @@ void fims_config_init_defaults(fims_config_t *cfg) {
     const char *env_log = getenv("FIMS_LOG_PATH");
     const char *env_rep = getenv("FIMS_REPORT_PATH");
     const char *env_state = getenv("FIMS_STATE_PATH");
+    const char *env_cfg = getenv("FIMS_CONFIG_PATH");
 
     safe_copy_str(cfg->baseline_file, sizeof(cfg->baseline_file), env_base ? env_base : FIMS_DEFAULT_BASELINE);
     safe_copy_str(cfg->log_file, sizeof(cfg->log_file), env_log ? env_log : FIMS_DEFAULT_LOG);
     safe_copy_str(cfg->report_file, sizeof(cfg->report_file), env_rep ? env_rep : FIMS_DEFAULT_REPORT);
     safe_copy_str(cfg->state_file, sizeof(cfg->state_file), env_state ? env_state : FIMS_DEFAULT_STATE);
+    safe_copy_str(cfg->config_file, sizeof(cfg->config_file), env_cfg ? env_cfg : FIMS_DEFAULT_CONFIG);
 
     /* Default exclusions: FIMS internal data/log directories and .git */
-    fims_config_add_exclude(cfg, "data/baseline.dat");
-    fims_config_add_exclude(cfg, "logs/fims.log");
+    fims_config_add_exclude(cfg, cfg->baseline_file);
+    fims_config_add_exclude(cfg, cfg->log_file);
     fims_config_add_exclude(cfg, ".git");
 }
 
@@ -137,28 +139,129 @@ fims_status_t fims_config_add_exclude(fims_config_t *cfg, const char *exclude_pa
     if (!cfg || !exclude_path || exclude_path[0] == '\0') return FIMS_ERR_INVALID_ARG;
     if (cfg->excluded_count >= FIMS_MAX_EXCLUDES) return FIMS_ERR_NOMEM;
 
+    char clean[FIMS_MAX_PATH];
+    if (exclude_path[0] == '/') {
+        safe_copy_str(clean, sizeof(clean), exclude_path);
+    } else {
+        char cwd[PATH_MAX];
+        if (getcwd(cwd, sizeof(cwd)) == NULL) {
+            return FIMS_ERR_IO;
+        }
+        int n = snprintf(clean, sizeof(clean), "%s/%s", cwd, exclude_path);
+        if (n < 0 || (size_t)n >= sizeof(clean)) {
+            return FIMS_ERR_INVALID_ARG;
+        }
+    }
+
+    /* Strip trailing slashes unless "/" */
+    size_t len = strlen(clean);
+    while (len > 1 && clean[len - 1] == '/') {
+        clean[len - 1] = '\0';
+        len--;
+    }
+
     for (size_t i = 0; i < cfg->excluded_count; i++) {
-        if (strcmp(cfg->excluded_paths[i], exclude_path) == 0) {
+        if (strcmp(cfg->excluded_paths[i], clean) == 0) {
             return FIMS_OK;
         }
     }
 
-    safe_copy_str(cfg->excluded_paths[cfg->excluded_count], FIMS_MAX_PATH, exclude_path);
+    safe_copy_str(cfg->excluded_paths[cfg->excluded_count], FIMS_MAX_PATH, clean);
     cfg->excluded_count++;
     return FIMS_OK;
 }
 
+static bool matches_exact_or_dir_prefix(const char *path, const char *target) {
+    if (!path || !target || target[0] == '\0') return false;
+
+    char abs_target[FIMS_MAX_PATH];
+    if (target[0] != '/') {
+        char cwd[PATH_MAX];
+        if (getcwd(cwd, sizeof(cwd)) == NULL) return false;
+        int n = snprintf(abs_target, sizeof(abs_target), "%s/%s", cwd, target);
+        if (n < 0 || (size_t)n >= sizeof(abs_target)) return false;
+    } else {
+        safe_copy_str(abs_target, sizeof(abs_target), target);
+    }
+
+    size_t tlen = strlen(abs_target);
+    while (tlen > 1 && abs_target[tlen - 1] == '/') {
+        abs_target[--tlen] = '\0';
+    }
+
+    if (strcmp(path, abs_target) == 0) return true;
+    if (strncmp(path, abs_target, tlen) == 0 && path[tlen] == '/') return true;
+    return false;
+}
+
+static bool matches_baseline_tmp(const char *path, const char *baseline_file) {
+    if (!path || !baseline_file || baseline_file[0] == '\0') return false;
+
+    char abs_base[FIMS_MAX_PATH];
+    if (baseline_file[0] != '/') {
+        char cwd[PATH_MAX];
+        if (getcwd(cwd, sizeof(cwd)) == NULL) return false;
+        int n = snprintf(abs_base, sizeof(abs_base), "%s/%s", cwd, baseline_file);
+        if (n < 0 || (size_t)n >= sizeof(abs_base)) return false;
+    } else {
+        safe_copy_str(abs_base, sizeof(abs_base), baseline_file);
+    }
+
+    size_t blen = strlen(abs_base);
+    while (blen > 1 && abs_base[blen - 1] == '/') {
+        abs_base[--blen] = '\0';
+    }
+
+    if (strncmp(path, abs_base, blen) == 0) {
+        const char *suffix = path + blen;
+        if (strncmp(suffix, ".tmp.", 5) == 0 || strcmp(suffix, ".tmp") == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool fims_config_is_excluded(const fims_config_t *cfg, const char *path) {
-    if (!cfg || !path) return false;
+    if (!cfg || !path || path[0] == '\0') return false;
+
+    char resolved_path[FIMS_MAX_PATH];
+    if (path[0] != '/') {
+        char cwd[PATH_MAX];
+        if (getcwd(cwd, sizeof(cwd)) != NULL) {
+            int n = snprintf(resolved_path, sizeof(resolved_path), "%s/%s", cwd, path);
+            if (n >= 0 && (size_t)n < sizeof(resolved_path)) {
+                path = resolved_path;
+            }
+        }
+    }
+
+    /* 1. Automatically exclude cfg->baseline_file, log_file, report_file, state_file, config_file, <baseline>.tmp.* */
+    if (cfg->baseline_file[0] != '\0') {
+        if (matches_exact_or_dir_prefix(path, cfg->baseline_file)) return true;
+        if (matches_baseline_tmp(path, cfg->baseline_file)) return true;
+    }
+    if (cfg->log_file[0] != '\0' && matches_exact_or_dir_prefix(path, cfg->log_file)) {
+        return true;
+    }
+    if (cfg->report_file[0] != '\0' && matches_exact_or_dir_prefix(path, cfg->report_file)) {
+        return true;
+    }
+    if (cfg->state_file[0] != '\0' && matches_exact_or_dir_prefix(path, cfg->state_file)) {
+        return true;
+    }
+    if (cfg->config_file[0] != '\0') {
+        if (matches_exact_or_dir_prefix(path, cfg->config_file)) return true;
+    } else {
+        const char *env_cfg = getenv("FIMS_CONFIG_PATH");
+        if (matches_exact_or_dir_prefix(path, env_cfg ? env_cfg : FIMS_DEFAULT_CONFIG)) return true;
+    }
+
+    /* 2. Check explicitly configured exclusions */
     for (size_t i = 0; i < cfg->excluded_count; i++) {
         const char *ex = cfg->excluded_paths[i];
         if (ex[0] == '\0') continue;
-        size_t ex_len = strlen(ex);
-        /* Match exact path, prefix boundary, or basename suffix */
-        if (strcmp(path, ex) == 0) return true;
-        if (strncmp(path, ex, ex_len) == 0 && (path[ex_len] == '/' || path[ex_len] == '\0')) {
-            return true;
-        }
+        if (matches_exact_or_dir_prefix(path, ex)) return true;
+
         const char *base = strrchr(path, '/');
         if (base && strcmp(base + 1, ex) == 0) {
             return true;
@@ -171,6 +274,7 @@ fims_status_t fims_config_load(fims_config_t *cfg, const char *config_path) {
     if (!cfg) return FIMS_ERR_INVALID_ARG;
     const char *path = config_path ? config_path : getenv("FIMS_CONFIG_PATH");
     if (!path) path = FIMS_DEFAULT_CONFIG;
+    safe_copy_str(cfg->config_file, sizeof(cfg->config_file), path);
 
     FILE *fp = fopen(path, "r");
     if (!fp) {

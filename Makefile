@@ -33,7 +33,7 @@ dirs:
 $(TARGET): $(CORE_OBJS) $(MAIN_OBJ)
 	$(CC) $(CFLAGS) -o $@ $(CORE_OBJS) $(MAIN_OBJ) $(LDFLAGS)
 
-$(SRCDIR)/%.o: $(SRCDIR)/%.c
+$(SRCDIR)/%.o: $(SRCDIR)/%.c include/fims.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(TESTDIR)/test_hash: $(TESTDIR)/test_hash.c $(CORE_OBJS)
