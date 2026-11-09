@@ -65,6 +65,11 @@ static void test_default_exclusions_init_scan(void) {
 
     fims_config_t cfg;
     fims_config_init_defaults(&cfg);
+    fims_path_join(cfg.baseline_file, sizeof(cfg.baseline_file), sub_data, "baseline.dat");
+    fims_path_join(cfg.log_file, sizeof(cfg.log_file), sub_logs, "fims.log");
+    fims_path_join(cfg.report_file, sizeof(cfg.report_file), sub_data, "report.dat");
+    fims_path_join(cfg.state_file, sizeof(cfg.state_file), sub_data, "status.dat");
+    fims_path_join(cfg.config_file, sizeof(cfg.config_file), sub_data, "fims.conf");
 
     size_t count = 0;
     assert(fims_baseline_init_from_dir(test_dir, &cfg, false, &count) == FIMS_OK);
@@ -196,9 +201,7 @@ int main(void) {
     fims_str_copy(cfg.baseline_file, sizeof(cfg.baseline_file), base_file);
     fims_str_copy(cfg.report_file, sizeof(cfg.report_file), rep_file);
     fims_str_copy(cfg.state_file, sizeof(cfg.state_file), state_file);
-    fims_config_add_exclude(&cfg, "rt_baseline.dat");
-    fims_config_add_exclude(&cfg, "rt_report.dat");
-    fims_config_add_exclude(&cfg, "rt_state.dat");
+    /* Basename-exclude workarounds removed per Item 25 */
 
     size_t init_cnt = 0;
     assert(fims_baseline_init_from_dir(test_dir, &cfg, true, &init_cnt) == FIMS_OK);
@@ -215,7 +218,8 @@ int main(void) {
     fims_monitor_request_stop();
     assert(pthread_join(mon_thread, NULL) == 0);
     assert(access(rep_file, F_OK) == 0);
-    printf("  [PASS] Real-time inotify monitoring & graceful interruption verified\n");
+    assert(fims_test_report_has_alert(rep_file, "FILE_MODIFIED", "sample.txt"));
+    printf("  [PASS] Real-time inotify monitoring & graceful interruption verified (alert present)\n");
 
     /* Cleanup */
     unlink(base_file);
