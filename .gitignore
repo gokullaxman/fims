@@ -5,12 +5,28 @@ tests/test_hash
 tests/test_scanner
 tests/test_baseline
 tests/test_integrity
+tests/test_*
+!tests/test_*.c
+!tests/test_*.h
+
+# ASan and UBSan artifacts
+*.asan*
+asan.log*
+*.dSYM/
 
 # Runtime state, baselines, and logs
 data/*.dat
 data/*.conf
 data/*.tmp*
 logs/*.log
+
+# Temporary test directories and artifacts
+tmp/
+*.tmp
+*.tmp.*
+
+# Agent teamwork metadata
+.agents/
 
 # Editor & OS artifacts
 *.swp
