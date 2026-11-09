@@ -14,6 +14,7 @@ CORE_SRCS = $(SRCDIR)/config.c \
             $(SRCDIR)/integrity.c \
             $(SRCDIR)/monitor.c \
             $(SRCDIR)/escape.c \
+            $(SRCDIR)/ui.c \
             $(SRCDIR)/cli.c
 
 CORE_OBJS = $(CORE_SRCS:.c=.o)

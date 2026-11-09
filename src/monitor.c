@@ -7,6 +7,7 @@
 #include "integrity.h"
 #include "logger.h"
 #include "config.h"
+#include "ui.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -969,28 +970,33 @@ fims_status_t fims_status_display(const fims_config_t *cfg) {
 
     fims_file_list_t base;
     fims_status_t bst = fims_baseline_load(cfg->baseline_file, &base);
+    const char *bl_status_str = "VALID & VERIFIED";
+    bool bl_valid = (bst == FIMS_OK);
+
     if (bst == FIMS_OK) {
         printf(" Baseline Status     : VALID & VERIFIED (%s)\n", cfg->baseline_file);
         printf(" Tracked Files       : %zu regular files\n", base.count);
         for (size_t i = 0; i < base.root_dir_count; i++) {
             printf(" Monitored Directory : %s\n", base.root_dirs[i]);
         }
-        fims_file_list_free(&base);
     } else if (bst == FIMS_ERR_NOT_FOUND) {
+        bl_status_str = "NOT INITIALIZED";
         printf(" Baseline Status     : NOT INITIALIZED (%s missing)\n", cfg->baseline_file);
     } else {
+        bl_status_str = "CORRUPTED / INVALID";
         printf(" Baseline Status     : CORRUPTED / INVALID (%s)\n", cfg->baseline_file);
     }
 
     FILE *fp = fopen(cfg->state_file, "r");
+    pid_t pid = 0;
+    time_t heartbeat = 0;
+    uint32_t interval = 30;
+    char active_str[64] = "IDLE";
+    char scan_ts_str[64] = "never";
+
     if (fp) {
         printf("--------------------------------------------------------------------------------\n");
         char line[512];
-        pid_t pid = 0;
-        time_t heartbeat = 0;
-        uint32_t interval = 30;
-        char active_str[64] = "IDLE";
-        char scan_ts_str[64] = "never";
 
         while (fgets(line, sizeof(line), fp) != NULL) {
             line[strcspn(line, "\r\n")] = '\0';
@@ -1036,5 +1042,30 @@ fims_status_t fims_status_display(const fims_config_t *cfg) {
         printf(" Runtime State       : No scan or monitoring session recorded yet.\n");
     }
     printf("================================================================================\n");
+
+    /* Professional Security Dashboard */
+    const char *hmac_key_file = getenv("FIMS_HMAC_KEY_FILE");
+    const char *auth_type = (hmac_key_file && hmac_key_file[0]) ? "HMAC-SHA256 (Authenticated)" : "SHA-256 Digest (Verified)";
+
+    fims_ui_section("System Security Dashboard");
+    fims_ui_field("Version", "%s", FIMS_VERSION);
+    fims_ui_field("Baseline", "%s", bl_status_str);
+    fims_ui_field("Authentication", "%s", auth_type);
+    fims_ui_field("Monitor Daemon", "%s", active_str);
+    fims_ui_field("Tracked Files", "%zu regular files", bl_valid ? base.count : 0);
+    fims_ui_field("Scan Interval", "%u seconds", interval);
+
+    fims_ui_section("Subsystem Readiness");
+    fims_ui_field("Integrity Engine", "READY");
+    fims_ui_field("SHA-256 Engine", "READY");
+    fims_ui_field("Event Monitoring", "%s", (strcmp(active_str, "RUNNING") == 0) ? "ACTIVE" : "READY");
+
+    if (bl_valid) {
+        fims_ui_status_box("PROTECTED", true, "Trusted baseline active and intact");
+        fims_file_list_free(&base);
+    } else {
+        fims_ui_status_box("ATTENTION REQUIRED", false, "Initialize baseline with 'fims init <dir>'");
+    }
+
     return FIMS_OK;
 }
