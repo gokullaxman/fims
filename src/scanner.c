@@ -9,14 +9,50 @@
 #include <dirent.h>
 #include <errno.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 
+#ifndef FIMS_MAX_SCAN_DEPTH
 #define FIMS_MAX_SCAN_DEPTH 128
+#endif
 
 typedef struct {
     uint64_t dev;
     uint64_t inode;
 } dir_visit_t;
+
+/* Internal counters for diagnostic queries (Items 7 and 13) */
+static size_t g_missing_root_count = 0;
+static size_t g_depth_limit_reached_count = 0;
+
+size_t fims_scanner_get_missing_root_count(void) {
+    return g_missing_root_count;
+}
+
+void fims_scanner_reset_missing_root_count(void) {
+    g_missing_root_count = 0;
+}
+
+size_t fims_scanner_get_depth_limit_reached_count(void) {
+    return g_depth_limit_reached_count;
+}
+
+void fims_scanner_reset_depth_limit_reached_count(void) {
+    g_depth_limit_reached_count = 0;
+}
+
+static void add_root_dir_if_absent(fims_file_list_t *list, const char *dir_path) {
+    if (!list || !dir_path) return;
+    for (size_t i = 0; i < list->root_dir_count; i++) {
+        if (strcmp(list->root_dirs[i], dir_path) == 0) {
+            return;
+        }
+    }
+    if (list->root_dir_count < FIMS_MAX_DIRS) {
+        snprintf(list->root_dirs[list->root_dir_count], FIMS_MAX_PATH, "%s", dir_path);
+        list->root_dir_count++;
+    }
+}
 
 fims_status_t fims_file_list_init(fims_file_list_t *list) {
     if (!list) return FIMS_ERR_INVALID_ARG;
@@ -80,35 +116,90 @@ void fims_file_list_sort(fims_file_list_t *list) {
     list->count = write_idx;
 }
 
-fims_status_t fims_scan_single_file(const char *file_path, fims_file_record_t *out_rec) {
-    if (!file_path || !out_rec) return FIMS_ERR_INVALID_ARG;
+/**
+ * Internal helper (Item 12): Hashes an open file descriptor directly and populates metadata
+ * from fstat on that same descriptor, eliminating TOCTOU race condition between stat and open.
+ */
+static fims_status_t scan_and_hash_open_fd(int fd, const char *file_path, fims_file_record_t *out_rec) {
+    if (fd < 0 || !file_path || !out_rec) {
+        return FIMS_ERR_INVALID_ARG;
+    }
 
     struct stat st;
-    if (lstat(file_path, &st) != 0) {
-        if (errno == EACCES || errno == EPERM) return FIMS_ERR_PERMISSION;
-        if (errno == ENOENT) return FIMS_ERR_NOT_FOUND;
+    if (fstat(fd, &st) != 0) {
         return FIMS_ERR_IO;
     }
 
-    if (S_ISLNK(st.st_mode)) {
-        return FIMS_ERR_INVALID_ARG;
-    }
-    if (!S_ISREG(st.st_mode)) {
+    /* Cleanly reject FIFOs, sockets, character devices, block devices, and non-regular files */
+    if (S_ISFIFO(st.st_mode) || S_ISSOCK(st.st_mode) || S_ISCHR(st.st_mode) ||
+        S_ISBLK(st.st_mode) || !S_ISREG(st.st_mode)) {
         return FIMS_ERR_INVALID_ARG;
     }
 
     memset(out_rec, 0, sizeof(*out_rec));
     snprintf(out_rec->path, sizeof(out_rec->path), "%s", file_path);
-    out_rec->dev   = (uint64_t)st.st_dev;
-    out_rec->inode = (uint64_t)st.st_ino;
-    out_rec->size  = (uint64_t)st.st_size;
-    out_rec->mode  = (uint32_t)(st.st_mode & 07777);
-    out_rec->uid   = (uint32_t)st.st_uid;
-    out_rec->gid   = (uint32_t)st.st_gid;
-    out_rec->mtime = (int64_t)st.st_mtime;
-    out_rec->ctime = (int64_t)st.st_ctime;
+    out_rec->dev        = (uint64_t)st.st_dev;
+    out_rec->inode      = (uint64_t)st.st_ino;
+    out_rec->size       = (uint64_t)st.st_size;
+    out_rec->mode       = (uint32_t)(st.st_mode & 07777);
+    out_rec->uid        = (uint32_t)st.st_uid;
+    out_rec->gid        = (uint32_t)st.st_gid;
+    out_rec->mtime      = (int64_t)st.st_mtime;
+    out_rec->ctime      = (int64_t)st.st_ctime;
+    out_rec->unreadable = false;
 
-    return fims_hash_file_sha256(file_path, out_rec->sha256);
+    return fims_hash_fd_sha256(fd, out_rec->sha256);
+}
+
+fims_status_t fims_scan_single_file(const char *file_path, fims_file_record_t *out_rec) {
+    if (!file_path || !out_rec) return FIMS_ERR_INVALID_ARG;
+
+    /* Open with O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK (Item 12):
+     * Non-blocking open ensures FIFOs do not hang waiting for a writer */
+    int fd;
+    do {
+        fd = open(file_path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK);
+    } while (fd < 0 && errno == EINTR);
+
+    if (fd < 0) {
+        /* Item 10: When a file cannot be read/opened due to EACCES / permission errors:
+         * Obtain metadata via lstat, fill record with empty sha256 and unreadable=true,
+         * and return FIMS_OK so the file is preserved in the file list */
+        if (errno == EACCES || errno == EPERM) {
+            struct stat lst;
+            if (lstat(file_path, &lst) != 0) {
+                return FIMS_ERR_PERMISSION;
+            }
+            if (S_ISLNK(lst.st_mode)) {
+                return FIMS_ERR_INVALID_ARG;
+            }
+            if (!S_ISREG(lst.st_mode)) {
+                return FIMS_ERR_INVALID_ARG;
+            }
+
+            memset(out_rec, 0, sizeof(*out_rec));
+            snprintf(out_rec->path, sizeof(out_rec->path), "%s", file_path);
+            out_rec->dev        = (uint64_t)lst.st_dev;
+            out_rec->inode      = (uint64_t)lst.st_ino;
+            out_rec->size       = (uint64_t)lst.st_size;
+            out_rec->mode       = (uint32_t)(lst.st_mode & 07777);
+            out_rec->uid        = (uint32_t)lst.st_uid;
+            out_rec->gid        = (uint32_t)lst.st_gid;
+            out_rec->mtime      = (int64_t)lst.st_mtime;
+            out_rec->ctime      = (int64_t)lst.st_ctime;
+            out_rec->sha256[0]  = '\0';
+            out_rec->unreadable = true;
+            return FIMS_OK;
+        }
+
+        if (errno == ENOENT) return FIMS_ERR_NOT_FOUND;
+        if (errno == ELOOP) return FIMS_ERR_INVALID_ARG; /* Symlink rejected */
+        return FIMS_ERR_IO;
+    }
+
+    fims_status_t st = scan_and_hash_open_fd(fd, file_path, out_rec);
+    close(fd);
+    return st;
 }
 
 static fims_status_t scan_dir_recursive(const char *current_dir,
@@ -116,8 +207,15 @@ static fims_status_t scan_dir_recursive(const char *current_dir,
                                         fims_file_list_t *out_list,
                                         dir_visit_t *ancestors,
                                         size_t depth) {
+    /* Item 13: Enforce FIMS_MAX_SCAN_DEPTH and log a warning when depth cap is reached */
     if (depth >= FIMS_MAX_SCAN_DEPTH) {
-        return FIMS_OK; /* Guard against excessive recursion depth */
+        g_depth_limit_reached_count++;
+        if (cfg && cfg->log_file[0]) {
+            fims_log_message(cfg->log_file, SEV_HIGH,
+                             "Maximum directory scan depth (%d) reached at: %s",
+                             FIMS_MAX_SCAN_DEPTH, current_dir);
+        }
+        return FIMS_OK;
     }
 
     if (cfg && fims_config_is_excluded(cfg, current_dir)) {
@@ -235,26 +333,36 @@ fims_status_t fims_scan_directory(const char *dir_path, const fims_config_t *cfg
 
     struct stat dir_st;
     if (lstat(clean_dir, &dir_st) != 0) {
-        if (errno == ENOENT) return FIMS_ERR_NOT_FOUND;
-        if (errno == EACCES || errno == EPERM) return FIMS_ERR_PERMISSION;
+        /* Item 7: If a monitored root directory is missing (ENOENT), unreadable (EACCES/EPERM),
+         * or not a directory (ENOTDIR):
+         * - Do NOT abort or return an error.
+         * - Treat it as an empty root directory: record root path in list->root_dirs,
+         *   increment list->root_dir_count, track count in internal counter, and return FIMS_OK. */
+        if (errno == ENOENT || errno == EACCES || errno == EPERM || errno == ENOTDIR) {
+            g_missing_root_count++;
+            add_root_dir_if_absent(out_list, clean_dir);
+            if (cfg && cfg->log_file[0]) {
+                fims_log_message(cfg->log_file, SEV_HIGH,
+                                 "Monitored root directory is inaccessible or missing: %s", clean_dir);
+            }
+            return FIMS_OK;
+        }
         return FIMS_ERR_IO;
     }
+
     if (!S_ISDIR(dir_st.st_mode)) {
-        return FIMS_ERR_INVALID_ARG;
+        /* Item 7: Non-directory root path treated gracefully as empty root */
+        g_missing_root_count++;
+        add_root_dir_if_absent(out_list, clean_dir);
+        if (cfg && cfg->log_file[0]) {
+            fims_log_message(cfg->log_file, SEV_HIGH,
+                             "Monitored root path is not a directory: %s", clean_dir);
+        }
+        return FIMS_OK;
     }
 
     /* Record root directory in out_list if not already present */
-    bool found = false;
-    for (size_t i = 0; i < out_list->root_dir_count; i++) {
-        if (strcmp(out_list->root_dirs[i], clean_dir) == 0) {
-            found = true;
-            break;
-        }
-    }
-    if (!found && out_list->root_dir_count < FIMS_MAX_DIRS) {
-        snprintf(out_list->root_dirs[out_list->root_dir_count], FIMS_MAX_PATH, "%s", clean_dir);
-        out_list->root_dir_count++;
-    }
+    add_root_dir_if_absent(out_list, clean_dir);
 
     dir_visit_t ancestors[FIMS_MAX_SCAN_DEPTH];
     memset(ancestors, 0, sizeof(ancestors));

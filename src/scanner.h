@@ -25,6 +25,15 @@ void fims_file_list_sort(fims_file_list_t *list);
 
 /**
  * Inspect and hash a single regular file at `file_path`, populating `out_rec`.
+ *
+ * Hardening & TOCTOU protection (Item 12):
+ * - Opens file with O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK.
+ * - Performs fstat on the open descriptor, eliminating TOCTOU race conditions.
+ * - Rejects FIFOs, sockets, character devices cleanly without blocking.
+ *
+ * Unreadable file support (Item 10):
+ * - If open fails with EACCES / EPERM, gathers metadata via lstat, sets unreadable=true,
+ *   empty sha256 (""), and returns FIMS_OK to preserve the record in the list.
  */
 fims_status_t fims_scan_single_file(const char *file_path, fims_file_record_t *out_rec);
 
@@ -37,8 +46,9 @@ fims_status_t fims_scan_single_file(const char *file_path, fims_file_record_t *o
  *   infinite loops and directory traversal traps.
  * - Tracks visited directory (dev, inode) pairs up to depth 128 as an extra guard
  *   against bind-mount or filesystem cycles.
- * - Gracefully logs and skips inaccessible files/subdirectories (EACCES/EPERM)
- *   without aborting the scan.
+ * - Enforces FIMS_MAX_SCAN_DEPTH (128) and logs a SEV_HIGH warning when reached (Item 13).
+ * - Treats missing (ENOENT), unreadable (EACCES), or non-directory roots gracefully as
+ *   empty roots rather than aborting (Item 7).
  */
 fims_status_t fims_scan_directory(const char *dir_path, const fims_config_t *cfg, fims_file_list_t *out_list);
 
@@ -47,5 +57,25 @@ fims_status_t fims_scan_directory(const char *dir_path, const fims_config_t *cfg
  */
 fims_status_t fims_scan_directories(const char dirs[][FIMS_MAX_PATH], size_t dir_count,
                                     const fims_config_t *cfg, fims_file_list_t *out_list);
+
+/**
+ * Query the count of missing, unreadable, or non-directory roots encountered during scans (Item 7).
+ */
+size_t fims_scanner_get_missing_root_count(void);
+
+/**
+ * Reset the missing/unreadable root counter to 0.
+ */
+void fims_scanner_reset_missing_root_count(void);
+
+/**
+ * Query the count of times directory scan recursion reached FIMS_MAX_SCAN_DEPTH (Item 13).
+ */
+size_t fims_scanner_get_depth_limit_reached_count(void);
+
+/**
+ * Reset the depth limit hit counter to 0.
+ */
+void fims_scanner_reset_depth_limit_reached_count(void);
 
 #endif /* FIMS_SCANNER_H */

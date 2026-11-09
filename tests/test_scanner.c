@@ -73,9 +73,13 @@ int main(void) {
 
     /* Verify nested directories & regular files collected */
     if (geteuid() != 0) {
-        assert(list.count == 3);
-        assert(list.skipped_inaccessible == 1);
-        printf("  [PASS] Inaccessible file skipped cleanly; 3 accessible regular files scanned\n");
+        assert(list.count == 4);
+        bool found_unreadable = false;
+        for (size_t i = 0; i < list.count; i++) {
+            if (list.records[i].unreadable) found_unreadable = true;
+        }
+        assert(found_unreadable);
+        printf("  [PASS] Inaccessible file recorded with unreadable flag; all 4 regular files present\n");
     } else {
         assert(list.count == 4);
         printf("  [PASS] All 4 regular files across nested directories scanned (running as root)\n");
@@ -83,7 +87,11 @@ int main(void) {
 
     /* Verify path sorting and metadata collection */
     for (size_t i = 0; i < list.count; i++) {
-        assert(strlen(list.records[i].sha256) == 64);
+        if (!list.records[i].unreadable) {
+            assert(strlen(list.records[i].sha256) == 64);
+        } else {
+            assert(strlen(list.records[i].sha256) == 0);
+        }
         if (i > 0) {
             assert(strcmp(list.records[i - 1].path, list.records[i].path) < 0);
         }
