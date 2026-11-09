@@ -951,24 +951,26 @@ static int cmd_menu(int argc, char **argv, fims_config_t *cfg) {
         const char *c_grn  = fims_ui_color(UI_COLOR_BOLD_GREEN);
         const char *c_rst  = fims_ui_color(UI_COLOR_RESET);
 
-        printf("\n%s╔══════════════════════════════════════════════════════════════════════════════╗%s\n", c_cyan, c_rst);
-        printf("%s║                    FIMS — FILE INTEGRITY MONITORING SYSTEM                   ║%s\n", c_cyan, c_rst);
-        printf("%s║                     Interactive Security Command Console                     ║%s\n", c_cyan, c_rst);
-        printf("%s╚══════════════════════════════════════════════════════════════════════════════╝%s\n\n", c_cyan, c_rst);
+        printf("\n%s╭──────────────────────────────────────────────────────────────────────────────╮%s\n", c_cyan, c_rst);
+        printf("%s│%s  %s◈ FIMS%s  │  %sFile Integrity Monitoring System%s  v%s                  %s│%s\n",
+               c_cyan, c_rst, c_cyan, c_rst, c_wht, c_rst, FIMS_VERSION, c_cyan, c_rst);
+        printf("%s│%s  %sInteractive Cybersecurity Console • Select an action to execute%s           %s│%s\n",
+               c_cyan, c_rst, c_dim, c_rst, c_cyan, c_rst);
+        printf("%s╰──────────────────────────────────────────────────────────────────────────────╯%s\n\n", c_cyan, c_rst);
 
         printf("%sSelect an operation to perform (choose option number):%s\n\n", c_wht, c_rst);
-        printf("  %s[1]%s %-32s %sCreate or replace trusted baseline for a directory%s\n", c_cyan, c_rst, "Initialize Baseline", c_dim, c_rst);
-        printf("  %s[2]%s %-32s %sCompare live files against cryptographic baseline%s\n", c_cyan, c_rst, "Run Integrity Scan", c_dim, c_rst);
-        printf("  %s[3]%s %-32s %sWatch filesystem events in real-time (inotify)%s\n", c_cyan, c_rst, "Real-time Inotify Monitor", c_dim, c_rst);
-        printf("  %s[4]%s %-32s %sDisplay readiness, engine state, and daemon telemetry%s\n", c_cyan, c_rst, "System Security Status", c_dim, c_rst);
-        printf("  %s[5]%s %-32s %sView detected changes and alert details%s\n", c_cyan, c_rst, "Scan Violation Report", c_dim, c_rst);
-        printf("  %s[6]%s %-32s %sDisplay tracked files and SHA-256 hashes%s\n", c_cyan, c_rst, "View Baseline Records", c_dim, c_rst);
-        printf("  %s[7]%s %-32s %sAccept detected modifications and update baseline%s\n", c_cyan, c_rst, "Update Baseline", c_dim, c_rst);
-        printf("  %s[8]%s %-32s %sInspect security paths and scan settings%s\n", c_cyan, c_rst, "Configuration Manager", c_dim, c_rst);
-        printf("  %s[9]%s %-32s %sStart full-screen terminal dashboard interface%s\n", c_grn, c_rst, "Launch Full-Screen TUI", c_dim, c_rst);
-        printf("  %s[0]%s %-32s %sExit FIMS console%s\n\n", c_dim, c_rst, "Exit Console", c_dim, c_rst);
+        printf("  %s› [1]%s  🛡️   %-28s %sEstablish cryptographic baseline for files%s\n", c_cyan, c_rst, "Initialize Baseline", c_dim, c_rst);
+        printf("    %s[2]%s  🔍  %-28s %sCompare live files against sealed baseline%s\n", c_cyan, c_rst, "Run Integrity Scan", c_dim, c_rst);
+        printf("    %s[3]%s  ⚡  %-28s %sWatch filesystem events in real-time (inotify)%s\n", c_cyan, c_rst, "Real-time Monitor", c_dim, c_rst);
+        printf("    %s[4]%s  📊  %-28s %sReadiness, engine state, and daemon telemetry%s\n", c_cyan, c_rst, "System Security Status", c_dim, c_rst);
+        printf("    %s[5]%s  🚨  %-28s %sView detected changes and alert details%s\n", c_cyan, c_rst, "Scan Violation Report", c_dim, c_rst);
+        printf("    %s[6]%s  📁  %-28s %sDisplay tracked files and SHA-256 digests%s\n", c_cyan, c_rst, "View Baseline Records", c_dim, c_rst);
+        printf("    %s[7]%s  🔄  %-28s %sAccept detected modifications into baseline%s\n", c_cyan, c_rst, "Update Baseline", c_dim, c_rst);
+        printf("    %s[8]%s  ⚙️   %-28s %sInspect security paths and scan settings%s\n", c_cyan, c_rst, "Configuration Manager", c_dim, c_rst);
+        printf("    %s[9]%s  🖥️   %-28s %sStart full-screen terminal dashboard%s\n", c_grn, c_rst, "Launch Full-Screen TUI", c_dim, c_rst);
+        printf("    %s[0]%s  🚪  %-28s %sExit FIMS console%s\n\n", c_dim, c_rst, "Exit Console", c_dim, c_rst);
 
-        printf("%sEnter option [0-9]: %s", c_cyan, c_rst);
+        printf("%s› Enter option [0-9]: %s", c_cyan, c_rst);
         fflush(stdout);
 
         char line[128];
@@ -978,18 +980,19 @@ static int cmd_menu(int argc, char **argv, fims_config_t *cfg) {
         cli_trim_whitespace(line);
 
         if (strcmp(line, "0") == 0 || strcmp(line, "q") == 0 || strcmp(line, "Q") == 0) {
-            printf("\nExiting FIMS Security Console. Stay safe!\n");
+            printf("\n%s● Exiting FIMS Security Console. System integrity preserved.%s\n", c_cyan, c_rst);
             break;
         }
 
         if (strcmp(line, "1") == 0) {
-            printf("\n%sChoose Directory Option:%s\n", c_wht, c_rst);
-            printf("  [1] Current Working Directory (.)\n");
-            printf("  [2] System Configuration (/etc)\n");
-            printf("  [3] System Logs (/var/log)\n");
-            printf("  [4] Temporary Directory (/tmp)\n");
-            printf("  [5] Custom Path\n");
-            printf("%sSelect directory [1-5]: %s", c_cyan, c_rst);
+            printf("\n%s╭─ Target Directory ───────────────────────────────╮%s\n", c_cyan, c_rst);
+            printf("%s│%s  [1]  ●  Current Working Directory (.)           %s│%s\n", c_cyan, c_rst, c_cyan, c_rst);
+            printf("%s│%s  [2]  ●  System Configuration (/etc)             %s│%s\n", c_cyan, c_rst, c_cyan, c_rst);
+            printf("%s│%s  [3]  ●  System Logs (/var/log)                  %s│%s\n", c_cyan, c_rst, c_cyan, c_rst);
+            printf("%s│%s  [4]  ●  Temporary Files (/tmp)                  %s│%s\n", c_cyan, c_rst, c_cyan, c_rst);
+            printf("%s│%s  [5]  ●  Custom Directory Path                   %s│%s\n", c_cyan, c_rst, c_cyan, c_rst);
+            printf("%s╰──────────────────────────────────────────────────╯%s\n", c_cyan, c_rst);
+            printf("%s› Select directory [1-5]: %s", c_cyan, c_rst);
             fflush(stdout);
 
             char dline[256];
@@ -1001,7 +1004,7 @@ static int cmd_menu(int argc, char **argv, fims_config_t *cfg) {
                 else if (strcmp(dline, "3") == 0) snprintf(target, sizeof(target), "/var/log");
                 else if (strcmp(dline, "4") == 0) snprintf(target, sizeof(target), "/tmp");
                 else if (strcmp(dline, "5") == 0) {
-                    printf("Enter custom path: ");
+                    printf("› Enter custom path: ");
                     fflush(stdout);
                     if (fgets(target, sizeof(target), stdin)) {
                         cli_trim_whitespace(target);
@@ -1009,10 +1012,11 @@ static int cmd_menu(int argc, char **argv, fims_config_t *cfg) {
                 }
             }
 
-            printf("\nOverwrite existing baseline if present?\n");
-            printf("  [1] No (Safe Mode)\n");
-            printf("  [2] Yes (Force Overwrite)\n");
-            printf("%sSelect [1-2]: %s", c_cyan, c_rst);
+            printf("\n%s╭─ Overwrite Policy ───────────────────────────────╮%s\n", c_cyan, c_rst);
+            printf("%s│%s  [1]  🛡️   Safe Mode (Preserve existing baseline)  %s│%s\n", c_cyan, c_rst, c_cyan, c_rst);
+            printf("%s│%s  [2]  ⚡  Force Overwrite (Replace baseline)      %s│%s\n", c_cyan, c_rst, c_cyan, c_rst);
+            printf("%s╰──────────────────────────────────────────────────╯%s\n", c_cyan, c_rst);
+            printf("%s› Select policy [1-2]: %s", c_cyan, c_rst);
             fflush(stdout);
 
             bool force = false;
@@ -1039,12 +1043,13 @@ static int cmd_menu(int argc, char **argv, fims_config_t *cfg) {
             wait_for_enter();
         }
         else if (strcmp(line, "3") == 0) {
-            printf("\n%sChoose Monitoring Duration:%s\n", c_wht, c_rst);
-            printf("  [1] 10 Seconds (Quick Test)\n");
-            printf("  [2] 30 Seconds (Standard Run)\n");
-            printf("  [3] 60 Seconds (Full Monitoring Cycle)\n");
-            printf("  [4] Continuous (Press Ctrl+C to stop)\n");
-            printf("%sSelect duration [1-4]: %s", c_cyan, c_rst);
+            printf("\n%s╭─ Monitoring Duration ────────────────────────────╮%s\n", c_cyan, c_rst);
+            printf("%s│%s  [1]  ⏱   10 Seconds (Quick Smoke Test)           %s│%s\n", c_cyan, c_rst, c_cyan, c_rst);
+            printf("%s│%s  [2]  ⏱   30 Seconds (Standard Scan Window)       %s│%s\n", c_cyan, c_rst, c_cyan, c_rst);
+            printf("%s│%s  [3]  ⏱   60 Seconds (Full Monitoring Cycle)      %s│%s\n", c_cyan, c_rst, c_cyan, c_rst);
+            printf("%s│%s  [4]  ⚡  Continuous Run (Press Ctrl+C to Stop)   %s│%s\n", c_cyan, c_rst, c_cyan, c_rst);
+            printf("%s╰──────────────────────────────────────────────────╯%s\n", c_cyan, c_rst);
+            printf("%s› Select duration [1-4]: %s", c_cyan, c_rst);
             fflush(stdout);
 
             char dur_line[64];
@@ -1120,10 +1125,11 @@ static int cmd_menu(int argc, char **argv, fims_config_t *cfg) {
             wait_for_enter();
         }
         else if (strcmp(line, "7") == 0) {
-            printf("\n%sUpdate baseline with changes from latest scan?%s\n", c_wht, c_rst);
-            printf("  [1] Review Diff and Update\n");
-            printf("  [2] Cancel\n");
-            printf("%sSelect [1-2]: %s", c_cyan, c_rst);
+            printf("\n%s╭─ Update Trusted Baseline ────────────────────────╮%s\n", c_cyan, c_rst);
+            printf("%s│%s  [1]  ✔  Review Diff and Update Baseline         %s│%s\n", c_cyan, c_rst, c_cyan, c_rst);
+            printf("%s│%s  [2]  ✖  Cancel Operation                        %s│%s\n", c_cyan, c_rst, c_cyan, c_rst);
+            printf("%s╰──────────────────────────────────────────────────╯%s\n", c_cyan, c_rst);
+            printf("%s› Select [1-2]: %s", c_cyan, c_rst);
             fflush(stdout);
 
             char uline[64];

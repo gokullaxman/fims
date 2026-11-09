@@ -43,7 +43,7 @@ static void render_box(WINDOW *win, int y, int x, int h, int w, const char *titl
 
     if (title && title[0]) {
         wattron(win, fims_color_attr(title_color ? title_color : CP_HEADER));
-        mvwprintw(win, y, x + 2, " %s ", title);
+        mvwprintw(win, y, x + 2, " ◈ %s ", title);
         wattroff(win, fims_color_attr(title_color ? title_color : CP_HEADER));
     }
 }
@@ -61,10 +61,10 @@ void fims_screen_render_dashboard(fims_tui_state_t *st) {
 
     /* Title */
     wattron(win, fims_color_attr(CP_HEADER));
-    mvwprintw(win, 1, 2, "FIMS SECURITY CONSOLE");
+    mvwprintw(win, 1, 2, "◈ FIMS SECURITY CONSOLE");
     wattroff(win, fims_color_attr(CP_HEADER));
     wattron(win, fims_color_attr(CP_DIM));
-    mvwprintw(win, 2, 2, "Real-Time Linux File Integrity Monitoring System (ISO C11)");
+    mvwprintw(win, 2, 2, "Real-Time Linux File Integrity Monitoring System • ISO C11");
     wattroff(win, fims_color_attr(CP_DIM));
 
     /* Panel dimensions */
@@ -120,37 +120,37 @@ void fims_screen_render_dashboard(fims_tui_state_t *st) {
     mvwprintw(win, 6, 4, "Baseline       : ");
     if (bl_valid) {
         wattron(win, fims_color_attr(CP_SUCCESS));
-        wprintw(win, "VALID & VERIFIED");
+        wprintw(win, "● VALID & VERIFIED");
         wattroff(win, fims_color_attr(CP_SUCCESS));
     } else if (bst == FIMS_ERR_NOT_FOUND) {
         wattron(win, fims_color_attr(CP_WARNING));
-        wprintw(win, "NOT INITIALIZED");
+        wprintw(win, "○ NOT INITIALIZED");
         wattroff(win, fims_color_attr(CP_WARNING));
     } else {
         wattron(win, fims_color_attr(CP_ERROR));
-        wprintw(win, "CORRUPTED");
+        wprintw(win, "✖ CORRUPTED");
         wattroff(win, fims_color_attr(CP_ERROR));
     }
 
     mvwprintw(win, 7, 4, "Authentication : ");
     if (has_hmac) {
         wattron(win, fims_color_attr(CP_SUCCESS));
-        wprintw(win, "HMAC-SHA256 (Protected)");
+        wprintw(win, "● HMAC-SHA256 (Protected)");
         wattroff(win, fims_color_attr(CP_SUCCESS));
     } else {
         wattron(win, fims_color_attr(CP_HEADER));
-        wprintw(win, "SHA-256 Digest");
+        wprintw(win, "● SHA-256 Digest");
         wattroff(win, fims_color_attr(CP_HEADER));
     }
 
     mvwprintw(win, 8, 4, "Monitor Daemon : ");
     if (strcmp(effective_mon, "ACTIVE") == 0) {
         wattron(win, fims_color_attr(CP_SUCCESS));
-        wprintw(win, "ACTIVE (inotify)");
+        wprintw(win, "● ACTIVE (inotify)");
         wattroff(win, fims_color_attr(CP_SUCCESS));
     } else {
         wattron(win, fims_color_attr(CP_DIM));
-        wprintw(win, "STANDBY / IDLE");
+        wprintw(win, "○ STANDBY / IDLE");
         wattroff(win, fims_color_attr(CP_DIM));
     }
 
@@ -178,22 +178,22 @@ void fims_screen_render_dashboard(fims_tui_state_t *st) {
     (void)rep_perm;
 
     mvwprintw(win, 6, panel_w + 6, "Files Checked  : %zu", rep_total > 0 ? rep_total : tracked_files);
-    mvwprintw(win, 7, panel_w + 6, "Unchanged      : ");
+    mvwprintw(win, 7, panel_w + 6, "● Unchanged    : ");
     wattron(win, fims_color_attr(CP_SUCCESS));
     wprintw(win, "%zu", rep_unchanged > 0 ? rep_unchanged : (rep_total == 0 ? tracked_files : 0));
     wattroff(win, fims_color_attr(CP_SUCCESS));
 
-    mvwprintw(win, 8, panel_w + 6, "Modified       : ");
+    mvwprintw(win, 8, panel_w + 6, "✖ Modified     : ");
     if (rep_mod > 0) wattron(win, fims_color_attr(CP_ERROR));
     wprintw(win, "%zu", rep_mod);
     if (rep_mod > 0) wattroff(win, fims_color_attr(CP_ERROR));
 
-    mvwprintw(win, 9, panel_w + 6, "Added          : ");
+    mvwprintw(win, 9, panel_w + 6, "▲ Added        : ");
     if (rep_add > 0) wattron(win, fims_color_attr(CP_WARNING));
     wprintw(win, "%zu", rep_add);
     if (rep_add > 0) wattroff(win, fims_color_attr(CP_WARNING));
 
-    mvwprintw(win, 10, panel_w + 6, "Deleted        : ");
+    mvwprintw(win, 10, panel_w + 6, "✖ Deleted      : ");
     if (rep_del > 0) wattron(win, fims_color_attr(CP_ERROR));
     wprintw(win, "%zu", rep_del);
     if (rep_del > 0) wattroff(win, fims_color_attr(CP_ERROR));
@@ -203,11 +203,11 @@ void fims_screen_render_dashboard(fims_tui_state_t *st) {
     int act_h = h - act_y - 2;
     if (act_h > 4) {
         render_box(win, act_y, 2, act_h, w - 4, "SECURITY SHORTCUTS & OPERATIONS", CP_HEADER);
-        mvwprintw(win, act_y + 2, 4, "[S] Run Integrity Scan     - Perform immediate full-tree filesystem verification");
-        mvwprintw(win, act_y + 3, 4, "[M] Live Monitor           - Launch real-time inotify kernel watcher");
-        mvwprintw(win, act_y + 4, 4, "[I] Initialize Baseline    - Create or re-baseline monitored paths");
-        mvwprintw(win, act_y + 5, 4, "[A] View Security Alerts   - Investigate detected modifications and threat events");
-        mvwprintw(win, act_y + 6, 4, "[C] Configuration Editor   - Modify intervals, paths, and alert thresholds");
+        mvwprintw(win, act_y + 2, 4, "[ S ]  🔍  Run Integrity Scan     - Perform immediate full-tree filesystem verification");
+        mvwprintw(win, act_y + 3, 4, "[ M ]  ⚡  Live Monitor           - Launch real-time inotify kernel watcher");
+        mvwprintw(win, act_y + 4, 4, "[ I ]  🛡️   Initialize Baseline    - Create or re-baseline monitored paths");
+        mvwprintw(win, act_y + 5, 4, "[ A ]  🚨  View Security Alerts   - Investigate detected modifications and threat events");
+        mvwprintw(win, act_y + 6, 4, "[ C ]  ⚙️   Configuration Editor   - Modify intervals, paths, and alert thresholds");
     }
 
     wrefresh(win);
@@ -258,10 +258,10 @@ void fims_screen_render_init(fims_tui_state_t *st) {
     werase(win);
 
     wattron(win, fims_color_attr(CP_HEADER));
-    mvwprintw(win, 1, 2, "INITIALIZE TRUSTED BASELINE");
+    mvwprintw(win, 1, 2, "◈ INITIALIZE TRUSTED BASELINE");
     wattroff(win, fims_color_attr(CP_HEADER));
     wattron(win, fims_color_attr(CP_DIM));
-    mvwprintw(win, 2, 2, "Establish self-verifying cryptographic baseline of regular files");
+    mvwprintw(win, 2, 2, "Establish self-verifying cryptographic baseline of regular files • ISO C11");
     wattroff(win, fims_color_attr(CP_DIM));
 
     render_box(win, 4, 2, 14, w - 4, "CONFIGURATION & TARGET PATH", CP_HEADER);
@@ -270,12 +270,12 @@ void fims_screen_render_init(fims_tui_state_t *st) {
     mvwprintw(win, 6, 4, "Directory Option    : ");
     if (st->focus == FOCUS_CONTENT && g_init_field == 0) {
         wattron(win, fims_color_attr(CP_BUTTON_ACT));
-        wprintw(win, " <  %-36s  > ", g_init_target);
+        wprintw(win, " ‹  %-34s  › ", g_init_target);
         wattroff(win, fims_color_attr(CP_BUTTON_ACT));
-        mvwprintw(win, 7, 26, "[LEFT/RIGHT] Change Option | [ENTER] Custom Path");
+        mvwprintw(win, 7, 26, "[LEFT/RIGHT] Cycle Preset • [ENTER] Custom Path");
     } else {
         wattron(win, fims_color_attr(CP_BUTTON_NORM) | A_REVERSE);
-        wprintw(win, "    %-36s    ", g_init_target);
+        wprintw(win, "    %-34s    ", g_init_target);
         wattroff(win, fims_color_attr(CP_BUTTON_NORM) | A_REVERSE);
     }
 
@@ -303,11 +303,11 @@ void fims_screen_render_init(fims_tui_state_t *st) {
     int btn_y = 14;
     if (st->focus == FOCUS_CONTENT && g_init_field == 3) {
         wattron(win, fims_color_attr(CP_STATUS_OK));
-        mvwprintw(win, btn_y, 4, " [ >>> INITIALIZE BASELINE NOW <<< ] ");
+        mvwprintw(win, btn_y, 4, " [ 🛡️   INITIALIZE BASELINE NOW ] ");
         wattroff(win, fims_color_attr(CP_STATUS_OK));
     } else {
         wattron(win, fims_color_attr(CP_BUTTON_NORM));
-        mvwprintw(win, btn_y, 4, "   >>> INITIALIZE BASELINE NOW <<<   ");
+        mvwprintw(win, btn_y, 4, "   🛡️   INITIALIZE BASELINE NOW   ");
         wattroff(win, fims_color_attr(CP_BUTTON_NORM));
     }
 
@@ -411,10 +411,10 @@ void fims_screen_render_scan(fims_tui_state_t *st) {
     werase(win);
 
     wattron(win, fims_color_attr(CP_HEADER));
-    mvwprintw(win, 1, 2, "INTEGRITY SCAN ENGINE");
+    mvwprintw(win, 1, 2, "◈ INTEGRITY SCAN ENGINE");
     wattroff(win, fims_color_attr(CP_HEADER));
     wattron(win, fims_color_attr(CP_DIM));
-    mvwprintw(win, 2, 2, "Compare live filesystem state against cryptographic baseline");
+    mvwprintw(win, 2, 2, "Compare live filesystem state against cryptographic baseline • SHA-256");
     wattroff(win, fims_color_attr(CP_DIM));
 
     render_box(win, 4, 2, 6, w - 4, "SCAN TARGET & BASELINE STATUS", CP_HEADER);
@@ -423,29 +423,29 @@ void fims_screen_render_scan(fims_tui_state_t *st) {
 
     /* Button */
     wattron(win, fims_color_attr(CP_STATUS_OK));
-    mvwprintw(win, 11, 4, " [ S ] START FULL INTEGRITY SCAN (Press 'S' or ENTER) ");
+    mvwprintw(win, 11, 4, " [ S ]  🔍  START FULL INTEGRITY SCAN (Press 'S' or ENTER) ");
     wattroff(win, fims_color_attr(CP_STATUS_OK));
 
     if (g_scan_completed) {
         render_box(win, 14, 2, 10, w - 4, "SCAN RESULTS & AUDIT METRICS", CP_HEADER);
 
         mvwprintw(win, 16, 4, "Files Scanned : %zu", g_scan_files);
-        mvwprintw(win, 17, 4, "Unchanged     : ");
+        mvwprintw(win, 17, 4, "● Unchanged   : ");
         wattron(win, fims_color_attr(CP_SUCCESS));
         wprintw(win, "%zu", g_scan_unchanged);
         wattroff(win, fims_color_attr(CP_SUCCESS));
 
-        mvwprintw(win, 18, 4, "Modified      : ");
+        mvwprintw(win, 18, 4, "✖ Modified    : ");
         if (g_scan_mod > 0) wattron(win, fims_color_attr(CP_ERROR));
         wprintw(win, "%zu", g_scan_mod);
         if (g_scan_mod > 0) wattroff(win, fims_color_attr(CP_ERROR));
 
-        mvwprintw(win, 19, 4, "Added         : ");
+        mvwprintw(win, 19, 4, "▲ Added       : ");
         if (g_scan_add > 0) wattron(win, fims_color_attr(CP_WARNING));
         wprintw(win, "%zu", g_scan_add);
         if (g_scan_add > 0) wattroff(win, fims_color_attr(CP_WARNING));
 
-        mvwprintw(win, 20, 4, "Deleted       : ");
+        mvwprintw(win, 20, 4, "✖ Deleted     : ");
         if (g_scan_del > 0) wattron(win, fims_color_attr(CP_ERROR));
         wprintw(win, "%zu", g_scan_del);
         if (g_scan_del > 0) wattroff(win, fims_color_attr(CP_ERROR));
@@ -458,11 +458,11 @@ void fims_screen_render_scan(fims_tui_state_t *st) {
         mvwprintw(win, 20, 36, "Scan Verdict  : ");
         if (total_changes == 0) {
             wattron(win, fims_color_attr(CP_STATUS_OK));
-            wprintw(win, " PROTECTED - NO CHANGES ");
+            wprintw(win, " ● PROTECTED - NO CHANGES ");
             wattroff(win, fims_color_attr(CP_STATUS_OK));
         } else {
             wattron(win, fims_color_attr(CP_STATUS_BAD));
-            wprintw(win, " VIOLATIONS DETECTED (%zu) ", total_changes);
+            wprintw(win, " ● VIOLATIONS DETECTED (%zu) ", total_changes);
             wattroff(win, fims_color_attr(CP_STATUS_BAD));
         }
 
@@ -546,10 +546,10 @@ void fims_screen_render_monitor(fims_tui_state_t *st) {
     werase(win);
 
     wattron(win, fims_color_attr(CP_HEADER));
-    mvwprintw(win, 1, 2, "REAL-TIME INOTIFY MONITOR");
+    mvwprintw(win, 1, 2, "◈ REAL-TIME INOTIFY MONITOR");
     wattroff(win, fims_color_attr(CP_HEADER));
     wattron(win, fims_color_attr(CP_DIM));
-    mvwprintw(win, 2, 2, "Continuous kernel event monitoring with inotify watcher");
+    mvwprintw(win, 2, 2, "Continuous kernel event monitoring with inotify watcher • Real-Time");
     wattroff(win, fims_color_attr(CP_DIM));
 
     render_box(win, 4, 2, 7, w - 4, "DAEMON TELEMETRY & STATUS", CP_HEADER);
@@ -578,7 +578,7 @@ void fims_screen_render_monitor(fims_tui_state_t *st) {
     }
 
     bool alive = (pid > 0 && kill(pid, 0) == 0);
-    mvwprintw(win, 6, 4, "Status        : %s", alive ? "ACTIVE (RUNNING)" : "IDLE / STANDBY");
+    mvwprintw(win, 6, 4, "Status        : %s", alive ? "● ACTIVE (RUNNING)" : "○ IDLE / STANDBY");
     mvwprintw(win, 7, 4, "Daemon PID    : %ld", (long)pid);
     mvwprintw(win, 8, 4, "Heartbeat     : %lld", (long long)hb);
     mvwprintw(win, 6, 36, "Scan Interval : %u seconds", interval);
@@ -641,10 +641,10 @@ void fims_screen_render_baseline(fims_tui_state_t *st) {
     werase(win);
 
     wattron(win, fims_color_attr(CP_HEADER));
-    mvwprintw(win, 1, 2, "TRUSTED BASELINE ARCHIVE");
+    mvwprintw(win, 1, 2, "◈ TRUSTED BASELINE ARCHIVE");
     wattroff(win, fims_color_attr(CP_HEADER));
     wattron(win, fims_color_attr(CP_DIM));
-    mvwprintw(win, 2, 2, "Cryptographic index of approved file hashes and POSIX metadata");
+    mvwprintw(win, 2, 2, "Cryptographic index of approved file hashes and POSIX metadata • SHA-256");
     wattroff(win, fims_color_attr(CP_DIM));
 
     fims_file_list_t bl;
@@ -653,7 +653,7 @@ void fims_screen_render_baseline(fims_tui_state_t *st) {
     render_box(win, 4, 2, 5, w - 4, "BASELINE METADATA", CP_HEADER);
     mvwprintw(win, 5, 4, "File Path : %s", st->cfg->baseline_file);
     mvwprintw(win, 6, 4, "Status    : %s (%zu files recorded)",
-              (bst == FIMS_OK) ? "VALID & VERIFIED" : "UNAVAILABLE", (bst == FIMS_OK) ? bl.count : 0);
+              (bst == FIMS_OK) ? "● VALID & VERIFIED" : "○ UNAVAILABLE", (bst == FIMS_OK) ? bl.count : 0);
 
     /* Records Table */
     int tbl_y = 10;
@@ -681,7 +681,7 @@ void fims_screen_render_baseline(fims_tui_state_t *st) {
         wattroff(win, fims_color_attr(CP_DIM));
     }
 
-    mvwprintw(win, h - 2, 4, "[UP/DOWN] Scroll Records | [U] Update Baseline after Changes");
+    mvwprintw(win, h - 2, 4, "↑↓ Scroll Records  •  [ U ] Update Baseline after Changes");
     wrefresh(win);
 }
 
@@ -728,7 +728,7 @@ void fims_screen_render_alerts(fims_tui_state_t *st) {
     werase(win);
 
     wattron(win, fims_color_attr(CP_HEADER));
-    mvwprintw(win, 1, 2, "SECURITY ALERTS & VIOLATIONS");
+    mvwprintw(win, 1, 2, "◈ SECURITY ALERTS & VIOLATIONS");
     wattroff(win, fims_color_attr(CP_HEADER));
     wattron(win, fims_color_attr(CP_DIM));
     mvwprintw(win, 2, 2, "Detected integrity breaches, unauthorized changes, and threat alerts");
@@ -791,7 +791,7 @@ void fims_screen_render_alerts(fims_tui_state_t *st) {
 
         if (count == 0) {
             wattron(win, fims_color_attr(CP_SUCCESS));
-            mvwprintw(win, tbl_y + 3, 4, "No alerts recorded. All files match trusted baseline.");
+            mvwprintw(win, tbl_y + 3, 4, "● No alerts recorded. All monitored files match trusted baseline.");
             wattroff(win, fims_color_attr(CP_SUCCESS));
         }
     } else {
@@ -801,7 +801,7 @@ void fims_screen_render_alerts(fims_tui_state_t *st) {
     }
 
     wattron(win, fims_color_attr(CP_KEYBIND));
-    mvwprintw(win, h - 1, 4, "[UP/DOWN] Scroll | [LEFT/RIGHT] Change Filter | [ENTER] Alert Details");
+    mvwprintw(win, h - 1, 4, "↑↓ Scroll  •  ←→ Filter Tabs  •  [ ⎋ ] Back");
     wattroff(win, fims_color_attr(CP_KEYBIND));
 
     wrefresh(win);
@@ -834,10 +834,10 @@ void fims_screen_render_reports(fims_tui_state_t *st) {
     werase(win);
 
     wattron(win, fims_color_attr(CP_HEADER));
-    mvwprintw(win, 1, 2, "INTEGRITY AUDIT REPORTS");
+    mvwprintw(win, 1, 2, "◈ INTEGRITY AUDIT REPORTS");
     wattroff(win, fims_color_attr(CP_HEADER));
     wattron(win, fims_color_attr(CP_DIM));
-    mvwprintw(win, 2, 2, "Forensic audit reports generated from automated and manual scans");
+    mvwprintw(win, 2, 2, "Forensic audit reports generated from automated and manual scans • ISO C11");
     wattroff(win, fims_color_attr(CP_DIM));
 
     render_box(win, 4, 2, 5, w - 4, "LATEST REPORT SOURCE", CP_HEADER);
@@ -846,7 +846,7 @@ void fims_screen_render_reports(fims_tui_state_t *st) {
     if (stat(st->cfg->report_file, &rst) == 0) {
         mvwprintw(win, 6, 4, "Size        : %lld bytes | Last Generated : %s", (long long)rst.st_size, ctime(&rst.st_mtime));
     } else {
-        mvwprintw(win, 6, 4, "Status      : NOT FOUND (Run scan to generate)");
+        mvwprintw(win, 6, 4, "Status      : ○ NOT FOUND (Run scan to generate)");
     }
 
     int rep_y = 10;
@@ -870,7 +870,7 @@ void fims_screen_render_reports(fims_tui_state_t *st) {
     }
 
     wattron(win, fims_color_attr(CP_KEYBIND));
-    mvwprintw(win, h - 1, 4, "[E] Export Report | [ESC] Back");
+    mvwprintw(win, h - 1, 4, "[ E ] Export Report  •  [ ⎋ ] Back");
     wattroff(win, fims_color_attr(CP_KEYBIND));
 
     wrefresh(win);
@@ -914,15 +914,15 @@ void fims_screen_render_config(fims_tui_state_t *st) {
     werase(win);
 
     wattron(win, fims_color_attr(CP_HEADER));
-    mvwprintw(win, 1, 2, "SYSTEM CONFIGURATION EDITOR");
+    mvwprintw(win, 1, 2, "◈ SYSTEM CONFIGURATION EDITOR");
     wattroff(win, fims_color_attr(CP_HEADER));
     wattron(win, fims_color_attr(CP_DIM));
-    mvwprintw(win, 2, 2, "Configure scan engine parameters, operational paths, and security thresholds");
+    mvwprintw(win, 2, 2, "Configure scan engine parameters, operational paths, and security thresholds • ISO C11");
     wattroff(win, fims_color_attr(CP_DIM));
 
     if (g_cfg_dirty) {
         wattron(win, fims_color_attr(CP_STATUS_WARN));
-        mvwprintw(win, 1, w - 20, " [ UNSAVED CHANGES ] ");
+        mvwprintw(win, 1, w - 24, " [ ● UNSAVED CHANGES ] ");
         wattroff(win, fims_color_attr(CP_STATUS_WARN));
     }
 
@@ -950,7 +950,7 @@ void fims_screen_render_config(fims_tui_state_t *st) {
 
         if (st->focus == FOCUS_CONTENT && g_cfg_selected == i) {
             wattron(win, fims_color_attr(CP_NAV_ACTIVE));
-            mvwprintw(win, y, 4, " > %-22s : %-20s ", labels[i], vals[i]);
+            mvwprintw(win, y, 4, " › %-22s : %-20s ", labels[i], vals[i]);
             wattroff(win, fims_color_attr(CP_NAV_ACTIVE));
         } else {
             mvwprintw(win, y, 4, "   %-22s : %-20s", labels[i], vals[i]);
@@ -964,7 +964,7 @@ void fims_screen_render_config(fims_tui_state_t *st) {
     mvwprintw(win, 24, 4, "Config File     : %s", st->cfg->config_file);
 
     wattron(win, fims_color_attr(CP_KEYBIND));
-    mvwprintw(win, h - 1, 4, "[UP/DOWN] Select Option | [SPACE] Toggle | [ENTER] Edit/Save");
+    mvwprintw(win, h - 1, 4, "↑↓ Select Option  •  ←→ / ␣ Toggle Preset  •  ↵ Edit / Save");
     wattroff(win, fims_color_attr(CP_KEYBIND));
 
     wrefresh(win);
@@ -1030,10 +1030,10 @@ void fims_screen_render_sysinfo(fims_tui_state_t *st) {
     werase(win);
 
     wattron(win, fims_color_attr(CP_HEADER));
-    mvwprintw(win, 1, 2, "SYSTEM ARCHITECTURE & CAPABILITIES");
+    mvwprintw(win, 1, 2, "◈ SYSTEM ARCHITECTURE & CAPABILITIES");
     wattroff(win, fims_color_attr(CP_HEADER));
     wattron(win, fims_color_attr(CP_DIM));
-    mvwprintw(win, 2, 2, "Technical runtime environment and cryptographic specifications");
+    mvwprintw(win, 2, 2, "Technical runtime environment and cryptographic specifications • Linux Security");
     wattroff(win, fims_color_attr(CP_DIM));
 
     struct utsname un;
@@ -1074,14 +1074,14 @@ void fims_screen_render_help(fims_tui_state_t *st) {
     werase(win);
 
     wattron(win, fims_color_attr(CP_HEADER));
-    mvwprintw(win, 1, 2, "FIMS USER MANUAL & KEYBINDINGS REFERENCE");
+    mvwprintw(win, 1, 2, "◈ FIMS USER MANUAL & KEYBINDINGS REFERENCE");
     wattroff(win, fims_color_attr(CP_HEADER));
 
     render_box(win, 4, 2, 11, w - 4, "KEYBOARD NAVIGATION", CP_HEADER);
     mvwprintw(win, 6, 4, "UP / DOWN     : Navigate navigation menu items and scroll data tables");
-    mvwprintw(win, 7, 4, "LEFT / RIGHT  : Switch filter tabs and toggle interactive options");
-    mvwprintw(win, 8, 4, "ENTER         : Select menu item / confirm action / inspect details");
-    mvwprintw(win, 9, 4, "ESC           : Return focus to navigation / dismiss active modal dialog");
+    mvwprintw(win, 7, 4, "LEFT / RIGHT  : Switch filter tabs and cycle presets");
+    mvwprintw(win, 8, 4, "ENTER         : Select menu item • confirm action • inspect details");
+    mvwprintw(win, 9, 4, "ESC           : Return focus to navigation • dismiss active modal dialog");
     mvwprintw(win, 10, 4, "TAB           : Toggle focus between Navigation Sidebar and Content Panel");
     mvwprintw(win, 11, 4, "SPACE         : Toggle configuration settings and checkbox options");
     mvwprintw(win, 12, 4, "Q             : Quit FIMS Security Console (with confirmation prompt)");

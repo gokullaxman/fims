@@ -34,7 +34,7 @@ bool fims_dialog_confirm(const char *title, const char *message, const char *btn
         /* Title */
         if (title) {
             wattron(win, fims_color_attr(CP_HEADER));
-            mvwprintw(win, 0, (w - (int)strlen(title) - 2) / 2, " %s ", title);
+            mvwprintw(win, 0, (w - (int)strlen(title) - 6) / 2, " ◈ %s ◈ ", title);
             wattroff(win, fims_color_attr(CP_HEADER));
         }
 
@@ -117,7 +117,7 @@ void fims_dialog_message(const char *title, const char *message, int color_pair)
 
     if (title) {
         wattron(win, fims_color_attr(color_pair ? color_pair : CP_HEADER));
-        mvwprintw(win, 0, (w - (int)strlen(title) - 2) / 2, " %s ", title);
+        mvwprintw(win, 0, (w - (int)strlen(title) - 6) / 2, " ◈ %s ◈ ", title);
         wattroff(win, fims_color_attr(color_pair ? color_pair : CP_HEADER));
     }
 
@@ -185,13 +185,13 @@ bool fims_dialog_input(const char *title, const char *prompt, char *buffer, size
 
         if (title) {
             wattron(win, fims_color_attr(CP_HEADER));
-            mvwprintw(win, 0, (w - (int)strlen(title) - 2) / 2, " %s ", title);
+            mvwprintw(win, 0, (w - (int)strlen(title) - 6) / 2, " ◈ %s ◈ ", title);
             wattroff(win, fims_color_attr(CP_HEADER));
         }
 
         if (prompt) {
             wattron(win, fims_color_attr(CP_DEFAULT));
-            mvwprintw(win, 2, 4, "%s", prompt);
+            mvwprintw(win, 2, 4, "› %s", prompt);
             wattroff(win, fims_color_attr(CP_DEFAULT));
         }
 
@@ -201,7 +201,7 @@ bool fims_dialog_input(const char *title, const char *prompt, char *buffer, size
         wattroff(win, fims_color_attr(CP_BUTTON_NORM) | A_REVERSE);
 
         wattron(win, fims_color_attr(CP_DIM));
-        mvwprintw(win, 6, (w - 28) / 2, "ENTER: Confirm | ESC: Cancel");
+        mvwprintw(win, 6, (w - 24) / 2, "↵ Confirm  •  ⎋ Cancel");
         wattroff(win, fims_color_attr(CP_DIM));
 
         wmove(win, 4, 4 + cursor);
@@ -264,7 +264,7 @@ void fims_dialog_progress_draw(const char *title, const char *action, size_t cur
 
     if (title) {
         wattron(win, fims_color_attr(CP_HEADER));
-        mvwprintw(win, 0, (w - (int)strlen(title) - 2) / 2, " %s ", title);
+        mvwprintw(win, 0, (w - (int)strlen(title) - 6) / 2, " ◈ %s ◈ ", title);
         wattroff(win, fims_color_attr(CP_HEADER));
     }
 
@@ -326,7 +326,7 @@ void fims_dialog_summary(const char *cmd_name,
 
     /* Header */
     wattron(win, fims_color_attr(CP_HEADER));
-    mvwprintw(win, 0, (w - 21) / 2, " EXECUTION SUMMARY ");
+    mvwprintw(win, 0, (w - 25) / 2, " ◈ EXECUTION SUMMARY ◈ ");
     wattroff(win, fims_color_attr(CP_HEADER));
 
     /* Fields */
@@ -337,7 +337,7 @@ void fims_dialog_summary(const char *cmd_name,
 
     mvwprintw(win, 3, 4, "Execution Status : ");
     wattron(win, fims_color_attr(is_ok ? CP_STATUS_OK : CP_STATUS_BAD));
-    wprintw(win, " %s ", status_badge ? status_badge : (is_ok ? "OK" : "FAILED"));
+    wprintw(win, " %s ", status_badge ? status_badge : (is_ok ? "● OK" : "● FAILED"));
     wattroff(win, fims_color_attr(is_ok ? CP_STATUS_OK : CP_STATUS_BAD));
 
     if (duration_ms > 0) {
@@ -355,22 +355,22 @@ void fims_dialog_summary(const char *cmd_name,
 
     mvwprintw(win, 6, 4, "Files Processed  : %zu", scanned);
 
-    mvwprintw(win, 7, 4, "  - Unchanged    : ");
+    mvwprintw(win, 7, 4, "  ● Unchanged    : ");
     wattron(win, fims_color_attr(CP_SUCCESS));
     wprintw(win, "%zu", unchanged);
     wattroff(win, fims_color_attr(CP_SUCCESS));
 
-    mvwprintw(win, 8, 4, "  - Modified     : ");
+    mvwprintw(win, 8, 4, "  ✖ Modified     : ");
     if (mod > 0) wattron(win, fims_color_attr(CP_ERROR));
     wprintw(win, "%zu", mod);
     if (mod > 0) wattroff(win, fims_color_attr(CP_ERROR));
 
-    mvwprintw(win, 9, 4, "  - Added        : ");
+    mvwprintw(win, 9, 4, "  ▲ Added        : ");
     if (add > 0) wattron(win, fims_color_attr(CP_WARNING));
     wprintw(win, "%zu", add);
     if (add > 0) wattroff(win, fims_color_attr(CP_WARNING));
 
-    mvwprintw(win, 10, 4, "  - Deleted      : ");
+    mvwprintw(win, 10, 4, "  ✖ Deleted      : ");
     if (del > 0) wattron(win, fims_color_attr(CP_ERROR));
     wprintw(win, "%zu", del);
     if (del > 0) wattroff(win, fims_color_attr(CP_ERROR));
@@ -383,7 +383,7 @@ void fims_dialog_summary(const char *cmd_name,
 
     /* Dismiss button */
     wattron(win, fims_color_attr(CP_BUTTON_ACT));
-    mvwprintw(win, h - 2, (w - 24) / 2, "[ ENTER / SPACE: Close ]");
+    mvwprintw(win, h - 2, (w - 24) / 2, " [ ↵ Close Summary ] ");
     wattroff(win, fims_color_attr(CP_BUTTON_ACT));
 
     wrefresh(win);

@@ -100,33 +100,18 @@ int fims_ui_get_term_width(void) {
 void fims_ui_banner(void) {
     const char *c_cyan = fims_ui_color(UI_COLOR_BOLD_CYAN);
     const char *c_dim  = fims_ui_color(UI_COLOR_DIM);
-    const char *c_blue = fims_ui_color(UI_COLOR_BLUE);
+    const char *c_grn  = fims_ui_color(UI_COLOR_BOLD_GREEN);
     const char *c_wht  = fims_ui_color(UI_COLOR_BOLD_WHITE);
     const char *c_rst  = fims_ui_color(UI_COLOR_RESET);
 
-    printf("%s╔══════════════════════════════════════════════════════════════════════════════╗%s\n", c_cyan, c_rst);
-    printf("%s║                                                                              ║%s\n", c_cyan, c_rst);
-    printf("%s║   %s███████╗██╗███╗   ███╗███████╗%s                                             %s║%s\n",
-           c_cyan, c_wht, c_rst, c_cyan, c_rst);
-    printf("%s║   %s██╔════╝██║████╗ ████║██╔════╝%s                                             %s║%s\n",
-           c_cyan, c_wht, c_rst, c_cyan, c_rst);
-    printf("%s║   %s█████╗  ██║██╔████╔██║███████╗%s                                             %s║%s\n",
-           c_cyan, c_wht, c_rst, c_cyan, c_rst);
-    printf("%s║   %s██╔══╝  ██║██║╚██╔╝██║╚════██║%s                                             %s║%s\n",
-           c_cyan, c_wht, c_rst, c_cyan, c_rst);
-    printf("%s║   %s██║     ██║██║ ╚═╝ ██║███████║%s                                             %s║%s\n",
-           c_cyan, c_wht, c_rst, c_cyan, c_rst);
-    printf("%s║   %s╚═╝     ╚═╝╚═╝     ╚═╝╚══════╝%s                                             %s║%s\n",
-           c_cyan, c_wht, c_rst, c_cyan, c_rst);
-    printf("%s║                                                                              ║%s\n", c_cyan, c_rst);
-    printf("%s║           %sFILE INTEGRITY MONITORING SYSTEM%s                                   %s║%s\n",
-           c_cyan, c_wht, c_rst, c_cyan, c_rst);
-    printf("%s║                         %sFIMS v%s%s                                            %s║%s\n",
-           c_cyan, c_blue, FIMS_VERSION, c_rst, c_cyan, c_rst);
-    printf("%s║                                                                              ║%s\n", c_cyan, c_rst);
-    printf("%s║           %sLinux Security & Real-Time Integrity Protection%s                    %s║%s\n",
-           c_cyan, c_dim, c_rst, c_cyan, c_rst);
-    printf("%s╚══════════════════════════════════════════════════════════════════════════════╝%s\n", c_cyan, c_rst);
+    printf("%s╭──────────────────────────────────────────────────────────────────────────────╮%s\n", c_cyan, c_rst);
+    printf("%s│%s  %s◈ FIMS%s  │  %sFile Integrity Monitoring System%s  v%s                  %s│%s\n",
+           c_cyan, c_rst, c_cyan, c_rst, c_wht, c_rst, FIMS_VERSION, c_cyan, c_rst);
+    printf("%s│%s  %sLinux Enterprise Threat Defense & Integrity Engine • ISO C11%s             %s│%s\n",
+           c_cyan, c_rst, c_dim, c_rst, c_cyan, c_rst);
+    printf("%s│%s  %sStatus: %s● PROTECTED%s %s(OpenSSL EVP SHA-256 • Linux inotify Subsystem)%s          %s│%s\n",
+           c_cyan, c_rst, c_dim, c_grn, c_rst, c_dim, c_rst, c_cyan, c_rst);
+    printf("%s╰──────────────────────────────────────────────────────────────────────────────╯%s\n", c_cyan, c_rst);
 }
 
 void fims_ui_header(const char *module_name) {
@@ -136,17 +121,13 @@ void fims_ui_header(const char *module_name) {
     const char *c_dim  = fims_ui_color(UI_COLOR_DIM);
     const char *c_rst  = fims_ui_color(UI_COLOR_RESET);
 
-    char title[128];
-    snprintf(title, sizeof(title), " [ %sFIMS%s | %s%s%s ] ", c_cyan, c_rst, c_wht, module_name ? module_name : "SECURITY", c_rst);
+    const char *mod = module_name ? module_name : "SECURITY";
+    printf("\n%s◆ FIMS%s › %s%s%s %s", c_cyan, c_rst, c_wht, mod, c_rst, c_dim);
 
-    /* Plain length without ANSI escapes for line padding */
-    int plain_len = 10 + (module_name ? (int)strlen(module_name) : 8);
-    int pad = width - plain_len;
+    int pad = width - 12 - (int)strlen(mod);
     if (pad < 4) pad = 4;
-
-    printf("\n%s──%s%s%s", c_dim, c_rst, title, c_dim);
-    for (int i = 0; i < pad - 2; i++) {
-        putchar('-');
+    for (int i = 0; i < pad; i++) {
+        printf("─");
     }
     printf("%s\n\n", c_rst);
 }
@@ -158,7 +139,7 @@ void fims_ui_divider(void) {
 
     printf("%s", c_dim);
     for (int i = 0; i < width; i++) {
-        putchar('-');
+        printf("─");
     }
     printf("%s\n", c_rst);
 }
@@ -168,7 +149,7 @@ void fims_ui_section(const char *section_title) {
     const char *c_dim  = fims_ui_color(UI_COLOR_DIM);
     const char *c_rst  = fims_ui_color(UI_COLOR_RESET);
 
-    printf("\n%s▪ %s%s%s\n", c_cyan, c_cyan, section_title, c_rst);
+    printf("\n%s● %s%s\n", c_cyan, section_title, c_rst);
     printf("%s  ──────────────────────────────────────────────────────────%s\n", c_dim, c_rst);
 }
 
@@ -180,7 +161,7 @@ void fims_ui_info(const char *fmt, ...) {
     const char *c_blu = fims_ui_color(UI_COLOR_BOLD_BLUE);
     const char *c_rst = fims_ui_color(UI_COLOR_RESET);
 
-    printf("%s[INFO]%s ", c_blu, c_rst);
+    printf("%s● [INFO]%s ", c_blu, c_rst);
     va_list args;
     va_start(args, fmt);
     vprintf(fmt, args);
@@ -193,7 +174,7 @@ void fims_ui_success(const char *fmt, ...) {
     const char *c_grn = fims_ui_color(UI_COLOR_BOLD_GREEN);
     const char *c_rst = fims_ui_color(UI_COLOR_RESET);
 
-    printf("%s[OK]%s ", c_grn, c_rst);
+    printf("%s✔ [OK]%s ", c_grn, c_rst);
     va_list args;
     va_start(args, fmt);
     vprintf(fmt, args);
@@ -206,7 +187,7 @@ void fims_ui_warn(const char *fmt, ...) {
     const char *c_yel = fims_ui_color(UI_COLOR_BOLD_YELLOW);
     const char *c_rst = fims_ui_color(UI_COLOR_RESET);
 
-    printf("%s[WARNING]%s ", c_yel, c_rst);
+    printf("%s▲ [WARNING]%s ", c_yel, c_rst);
     va_list args;
     va_start(args, fmt);
     vprintf(fmt, args);
@@ -219,7 +200,7 @@ void fims_ui_error(const char *fmt, ...) {
     const char *c_red = fims_ui_color(UI_COLOR_BOLD_RED);
     const char *c_rst = fims_ui_color(UI_COLOR_RESET);
 
-    fprintf(stderr, "%s[ERROR]%s ", c_red, c_rst);
+    fprintf(stderr, "%s✖ [ERROR]%s ", c_red, c_rst);
     va_list args;
     va_start(args, fmt);
     vfprintf(stderr, fmt, args);
@@ -232,7 +213,7 @@ void fims_ui_critical(const char *fmt, ...) {
     const char *c_red = fims_ui_color(UI_COLOR_BOLD_RED);
     const char *c_rst = fims_ui_color(UI_COLOR_RESET);
 
-    fprintf(stderr, "%s[CRITICAL]%s ", c_red, c_rst);
+    fprintf(stderr, "%s✖ [CRITICAL]%s ", c_red, c_rst);
     va_list args;
     va_start(args, fmt);
     vfprintf(stderr, fmt, args);
@@ -324,9 +305,11 @@ void fims_ui_status_box(const char *status_str, bool is_ok, const char *detail) 
     const char *c_dim   = fims_ui_color(UI_COLOR_DIM);
     const char *c_rst   = fims_ui_color(UI_COLOR_RESET);
 
-    printf("\n  %sSTATUS: %s%s%s", c_dim, c_badge, status_str ? status_str : (is_ok ? "PROTECTED" : "ATTENTION REQUIRED"), c_rst);
+    printf("\n  %s● STATUS:%s  %s%s %s%s",
+           c_dim, c_rst,
+           c_badge, is_ok ? "✔" : "▲", status_str ? status_str : (is_ok ? "PROTECTED" : "ATTENTION REQUIRED"), c_rst);
     if (detail && detail[0]) {
-        printf(" %s(%s)%s", c_dim, detail, c_rst);
+        printf(" %s• %s%s", c_dim, detail, c_rst);
     }
     printf("\n\n");
 }
@@ -343,48 +326,58 @@ void fims_ui_execution_summary(const fims_execution_summary_t *summary) {
     const char *c_rst  = fims_ui_color(UI_COLOR_RESET);
 
     const char *c_status = summary->is_success ? c_grn : (summary->exit_code == 3 ? c_red : c_yel);
+    const char *status_icon = summary->is_success ? "✔" : (summary->exit_code == 3 ? "✖" : "▲");
 
-    printf("\n%s╔══════════════════════════════════════════════════════════════════════════════╗%s\n", c_cyan, c_rst);
-    printf("%s║                             EXECUTION SUMMARY                                ║%s\n", c_cyan, c_rst);
-    printf("%s╠══════════════════════════════════════════════════════════════════════════════╣%s\n", c_cyan, c_rst);
-
-    printf("  %s%-22s%s : %s%s%s\n", c_dim, "Command", c_rst, c_wht, summary->command_name ? summary->command_name : "UNKNOWN", c_rst);
-    printf("  %s%-22s%s : %s%s%s\n", c_dim, "Status", c_rst, c_status, summary->status_str ? summary->status_str : (summary->is_success ? "[ OK ] SUCCESS" : "[ FAILED ]"), c_rst);
-    printf("  %s%-22s%s : %s%d%s\n", c_dim, "Exit Code", c_rst, c_wht, summary->exit_code, c_rst);
+    printf("\n%s╭─ EXECUTION SUMMARY ──────────────────────────────────────────────────────────╮%s\n", c_cyan, c_rst);
+    printf("%s│%s                                                                              %s│%s\n", c_cyan, c_rst, c_cyan, c_rst);
+    printf("%s│%s  %s● Command%s          : %s%-47s%s %s│%s\n",
+           c_cyan, c_rst, c_dim, c_rst, c_wht, summary->command_name ? summary->command_name : "UNKNOWN", c_rst, c_cyan, c_rst);
+    printf("%s│%s  %s● Status%s           : %s%s %-45s%s %s│%s\n",
+           c_cyan, c_rst, c_dim, c_rst, c_status, status_icon, summary->status_str ? summary->status_str : (summary->is_success ? "SUCCESS" : "FAILED"), c_rst, c_cyan, c_rst);
+    printf("%s│%s  %s● Exit Code%s        : %s%-47d%s %s│%s\n",
+           c_cyan, c_rst, c_dim, c_rst, c_wht, summary->exit_code, c_rst, c_cyan, c_rst);
 
     if (summary->duration_ms > 0) {
-        printf("  %s%-22s%s : %s%.2f ms%s\n", c_dim, "Duration", c_rst, c_wht, summary->duration_ms, c_rst);
+        char dur_str[64];
+        snprintf(dur_str, sizeof(dur_str), "%.2f ms", summary->duration_ms);
+        printf("%s│%s  %s● Duration%s         : %s%-47s%s %s│%s\n",
+               c_cyan, c_rst, c_dim, c_rst, c_wht, dur_str, c_rst, c_cyan, c_rst);
     }
     if (summary->target_dir && summary->target_dir[0]) {
-        printf("  %s%-22s%s : %s%s%s\n", c_dim, "Target Directory", c_rst, c_wht, summary->target_dir, c_rst);
-    }
-    if (summary->files_total > 0) {
-        printf("  %s%-22s%s : %s%zu regular files%s\n", c_dim, "Files Processed", c_rst, c_wht, summary->files_total, c_rst);
-        printf("  %s%-22s%s : %s%zu%s\n", c_dim, "  - Unchanged", c_rst, c_grn, summary->files_unchanged, c_rst);
-        if (summary->files_modified > 0) {
-            printf("  %s%-22s%s : %s%zu%s\n", c_dim, "  - Modified", c_rst, c_red, summary->files_modified, c_rst);
-        }
-        if (summary->files_added > 0) {
-            printf("  %s%-22s%s : %s%zu%s\n", c_dim, "  - Added", c_rst, c_yel, summary->files_added, c_rst);
-        }
-        if (summary->files_deleted > 0) {
-            printf("  %s%-22s%s : %s%zu%s\n", c_dim, "  - Deleted", c_rst, c_red, summary->files_deleted, c_rst);
-        }
-        if (summary->files_renamed > 0) {
-            printf("  %s%-22s%s : %s%zu%s\n", c_dim, "  - Renamed", c_rst, c_yel, summary->files_renamed, c_rst);
-        }
-        if (summary->files_perms > 0) {
-            printf("  %s%-22s%s : %s%zu%s\n", c_dim, "  - Perms Changed", c_rst, c_yel, summary->files_perms, c_rst);
-        }
-    }
-    if (summary->details && summary->details[0]) {
-        printf("  %s%-22s%s : %s%s%s\n", c_dim, "Security Details", c_rst, c_wht, summary->details, c_rst);
-    }
-    if (summary->verdict && summary->verdict[0]) {
-        printf("  %s%-22s%s : %s%s%s\n", c_dim, "Verdict", c_rst, c_status, summary->verdict, c_rst);
+        printf("%s│%s  %s● Monitored Path%s   : %s%-47.47s%s %s│%s\n",
+               c_cyan, c_rst, c_dim, c_rst, c_wht, summary->target_dir, c_rst, c_cyan, c_rst);
     }
 
-    printf("%s╚══════════════════════════════════════════════════════════════════════════════╝%s\n\n", c_cyan, c_rst);
+    if (summary->files_total > 0) {
+        printf("%s│%s                                                                              %s│%s\n", c_cyan, c_rst, c_cyan, c_rst);
+        printf("%s│%s  %s┌─ Audit Breakdown ────────────────────────────────────────────────────────┐%s %s│%s\n",
+               c_cyan, c_rst, c_dim, c_rst, c_cyan, c_rst);
+        printf("%s│%s  %s│%s  Files Checked : %-12zu  Unchanged : %s%-12zu%s            %s│%s %s│%s\n",
+               c_cyan, c_rst, c_dim, c_rst, summary->files_total, c_grn, summary->files_unchanged, c_rst, c_dim, c_rst, c_cyan, c_rst);
+        printf("%s│%s  %s│%s  Modified      : %s%-12zu%s  Added     : %s%-12zu%s            %s│%s %s│%s\n",
+               c_cyan, c_rst, c_dim, c_rst,
+               summary->files_modified > 0 ? c_red : c_wht, summary->files_modified, c_rst,
+               summary->files_added > 0 ? c_yel : c_wht, summary->files_added, c_rst,
+               c_dim, c_rst, c_cyan, c_rst);
+        printf("%s│%s  %s│%s  Deleted       : %s%-12zu%s  Renamed   : %s%-12zu%s            %s│%s %s│%s\n",
+               c_cyan, c_rst, c_dim, c_rst,
+               summary->files_deleted > 0 ? c_red : c_wht, summary->files_deleted, c_rst,
+               summary->files_renamed > 0 ? c_yel : c_wht, summary->files_renamed, c_rst,
+               c_dim, c_rst, c_cyan, c_rst);
+        printf("%s│%s  %s└──────────────────────────────────────────────────────────────────────────┘%s %s│%s\n",
+               c_cyan, c_rst, c_dim, c_rst, c_cyan, c_rst);
+    }
+
+    if (summary->details && summary->details[0]) {
+        printf("%s│%s  %s◈ Cryptography%s     : %s%-47.47s%s %s│%s\n",
+               c_cyan, c_rst, c_dim, c_rst, c_wht, summary->details, c_rst, c_cyan, c_rst);
+    }
+    if (summary->verdict && summary->verdict[0]) {
+        printf("%s│%s  %s◈ Verdict%s          : %s%-47.47s%s %s│%s\n",
+               c_cyan, c_rst, c_dim, c_rst, c_status, summary->verdict, c_rst, c_cyan, c_rst);
+    }
+
+    printf("%s╰──────────────────────────────────────────────────────────────────────────────╯%s\n\n", c_cyan, c_rst);
 }
 
 /* ============================================================================

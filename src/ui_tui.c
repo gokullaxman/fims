@@ -103,15 +103,23 @@ static void render_header(fims_tui_state_t *st) {
 
     int w = st->term_w;
 
-    /* Top branding title */
+    /* Top modern branding title */
     wattron(win, fims_color_attr(CP_HEADER));
-    mvwprintw(win, 1, 2, "FIMS | FILE INTEGRITY MONITORING SYSTEM");
+    mvwprintw(win, 1, 2, "◈ FIMS");
     wattroff(win, fims_color_attr(CP_HEADER));
 
     wattron(win, fims_color_attr(CP_DIM));
-    const char *ver_str = "v" FIMS_VERSION " (Linux Security)";
+    wprintw(win, "  │  ");
+    wattroff(win, fims_color_attr(CP_DIM));
+
+    wattron(win, fims_color_attr(CP_DEFAULT));
+    wprintw(win, "File Integrity Monitoring System");
+    wattroff(win, fims_color_attr(CP_DEFAULT));
+
+    wattron(win, fims_color_attr(CP_DIM));
+    const char *ver_str = "● v" FIMS_VERSION " (Linux Security)";
     int v_len = (int)strlen(ver_str);
-    if (w - v_len - 3 > 45) {
+    if (w - v_len - 3 > 52) {
         mvwprintw(win, 1, w - v_len - 3, "%s", ver_str);
     }
     wattroff(win, fims_color_attr(CP_DIM));
@@ -140,15 +148,15 @@ static void render_footer(fims_tui_state_t *st) {
     }
     wattroff(win, fims_color_attr(CP_BORDER));
 
-    /* Key bindings helper */
+    /* Modern key bindings helper */
     wattron(win, fims_color_attr(CP_DIM));
-    mvwprintw(win, 1, 2, "UP/DOWN: Nav | ENTER: Select | TAB: Focus | SPACE: Toggle | ESC: Back | Q: Quit");
+    mvwprintw(win, 1, 2, "↑↓ Navigate  •  ↵ Select  •  ⇥ Switch Focus  •  ␣ Toggle  •  ⎋ Back  •  Q Quit");
     wattroff(win, fims_color_attr(CP_DIM));
 
     /* Focus badge */
-    const char *foc_str = (st->focus == FOCUS_NAV) ? "[FOCUS: NAV]" : "[FOCUS: PANEL]";
+    const char *foc_str = (st->focus == FOCUS_NAV) ? "[FOCUS: NAVIGATION]" : "[FOCUS: PANEL]";
     int f_len = (int)strlen(foc_str);
-    if (w - f_len - 3 > 70) {
+    if (w - f_len - 3 > 76) {
         wattron(win, fims_color_attr(st->focus == FOCUS_NAV ? CP_HEADER : CP_SUCCESS));
         mvwprintw(win, 1, w - f_len - 3, "%s", foc_str);
         wattroff(win, fims_color_attr(st->focus == FOCUS_NAV ? CP_HEADER : CP_SUCCESS));
@@ -173,7 +181,7 @@ static void render_navigation(fims_tui_state_t *st) {
     wattroff(win, fims_color_attr(border_pair));
 
     wattron(win, fims_color_attr(CP_HEADER));
-    mvwprintw(win, 0, 2, " NAVIGATION ");
+    mvwprintw(win, 0, 2, " ◈ NAVIGATION ");
     wattroff(win, fims_color_attr(CP_HEADER));
 
     int start_y = 2;
@@ -184,15 +192,15 @@ static void render_navigation(fims_tui_state_t *st) {
 
         if (is_selected && st->focus == FOCUS_NAV) {
             wattron(win, fims_color_attr(CP_NAV_ACTIVE));
-            mvwprintw(win, y, 1, " > %-16s ", NAV_ENTRIES[i].label);
+            mvwprintw(win, y, 1, " › %-16s ", NAV_ENTRIES[i].label);
             wattroff(win, fims_color_attr(CP_NAV_ACTIVE));
         } else if (is_selected) {
             wattron(win, fims_color_attr(CP_NAV_NORMAL) | A_REVERSE);
-            mvwprintw(win, y, 1, " > %-16s ", NAV_ENTRIES[i].label);
+            mvwprintw(win, y, 1, " › %-16s ", NAV_ENTRIES[i].label);
             wattroff(win, fims_color_attr(CP_NAV_NORMAL) | A_REVERSE);
         } else if (is_active) {
             wattron(win, fims_color_attr(CP_SUCCESS));
-            mvwprintw(win, y, 1, " * %-16s ", NAV_ENTRIES[i].label);
+            mvwprintw(win, y, 1, " ● %-16s ", NAV_ENTRIES[i].label);
             wattroff(win, fims_color_attr(CP_SUCCESS));
         } else {
             wattron(win, fims_color_attr(CP_NAV_NORMAL));
