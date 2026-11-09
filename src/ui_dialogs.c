@@ -295,3 +295,107 @@ void fims_dialog_progress_draw(const char *title, const char *action, size_t cur
     wrefresh(win);
     delwin(win);
 }
+
+void fims_dialog_summary(const char *cmd_name,
+                         bool is_ok,
+                         const char *status_badge,
+                         size_t scanned,
+                         size_t unchanged,
+                         size_t mod,
+                         size_t add,
+                         size_t del,
+                         double duration_ms,
+                         const char *details) {
+    int w = 62;
+    int h = 15;
+    int start_y = (LINES - h) / 2;
+    int start_x = (COLS - w) / 2;
+
+    if (start_y < 0) start_y = 0;
+    if (start_x < 0) start_x = 0;
+
+    WINDOW *win = newwin(h, w, start_y, start_x);
+    if (!win) return;
+
+    keypad(win, TRUE);
+
+    werase(win);
+    wattron(win, fims_color_attr(is_ok ? CP_SUCCESS : CP_ERROR));
+    box(win, 0, 0);
+    wattroff(win, fims_color_attr(is_ok ? CP_SUCCESS : CP_ERROR));
+
+    /* Header */
+    wattron(win, fims_color_attr(CP_HEADER));
+    mvwprintw(win, 0, (w - 21) / 2, " EXECUTION SUMMARY ");
+    wattroff(win, fims_color_attr(CP_HEADER));
+
+    /* Fields */
+    mvwprintw(win, 2, 4, "Command Executed : ");
+    wattron(win, fims_color_attr(CP_DEFAULT) | A_BOLD);
+    wprintw(win, "%s", cmd_name ? cmd_name : "OPERATION");
+    wattroff(win, fims_color_attr(CP_DEFAULT) | A_BOLD);
+
+    mvwprintw(win, 3, 4, "Execution Status : ");
+    wattron(win, fims_color_attr(is_ok ? CP_STATUS_OK : CP_STATUS_BAD));
+    wprintw(win, " %s ", status_badge ? status_badge : (is_ok ? "OK" : "FAILED"));
+    wattroff(win, fims_color_attr(is_ok ? CP_STATUS_OK : CP_STATUS_BAD));
+
+    if (duration_ms > 0) {
+        mvwprintw(win, 4, 4, "Duration         : %.2f ms", duration_ms);
+    } else {
+        mvwprintw(win, 4, 4, "Duration         : < 1 ms");
+    }
+
+    /* Divider */
+    wattron(win, fims_color_attr(CP_BORDER));
+    for (int i = 1; i < w - 1; i++) {
+        mvwaddch(win, 5, i, ACS_HLINE);
+    }
+    wattroff(win, fims_color_attr(CP_BORDER));
+
+    mvwprintw(win, 6, 4, "Files Processed  : %zu", scanned);
+
+    mvwprintw(win, 7, 4, "  - Unchanged    : ");
+    wattron(win, fims_color_attr(CP_SUCCESS));
+    wprintw(win, "%zu", unchanged);
+    wattroff(win, fims_color_attr(CP_SUCCESS));
+
+    mvwprintw(win, 8, 4, "  - Modified     : ");
+    if (mod > 0) wattron(win, fims_color_attr(CP_ERROR));
+    wprintw(win, "%zu", mod);
+    if (mod > 0) wattroff(win, fims_color_attr(CP_ERROR));
+
+    mvwprintw(win, 9, 4, "  - Added        : ");
+    if (add > 0) wattron(win, fims_color_attr(CP_WARNING));
+    wprintw(win, "%zu", add);
+    if (add > 0) wattroff(win, fims_color_attr(CP_WARNING));
+
+    mvwprintw(win, 10, 4, "  - Deleted      : ");
+    if (del > 0) wattron(win, fims_color_attr(CP_ERROR));
+    wprintw(win, "%zu", del);
+    if (del > 0) wattroff(win, fims_color_attr(CP_ERROR));
+
+    if (details && details[0]) {
+        wattron(win, fims_color_attr(CP_DIM));
+        mvwprintw(win, 11, 4, "Target / Notes   : %.*s", w - 24, details);
+        wattroff(win, fims_color_attr(CP_DIM));
+    }
+
+    /* Dismiss button */
+    wattron(win, fims_color_attr(CP_BUTTON_ACT));
+    mvwprintw(win, h - 2, (w - 24) / 2, "[ ENTER / SPACE: Close ]");
+    wattroff(win, fims_color_attr(CP_BUTTON_ACT));
+
+    wrefresh(win);
+
+    while (1) {
+        int ch = wgetch(win);
+        if (ch == '\n' || ch == KEY_ENTER || ch == ' ' || ch == 27 || ch == 'q' || ch == 'Q') {
+            break;
+        }
+    }
+
+    delwin(win);
+    touchwin(stdscr);
+    refresh();
+}

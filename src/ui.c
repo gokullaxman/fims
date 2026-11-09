@@ -331,6 +331,62 @@ void fims_ui_status_box(const char *status_str, bool is_ok, const char *detail) 
     printf("\n\n");
 }
 
+void fims_ui_execution_summary(const fims_execution_summary_t *summary) {
+    if (!summary) return;
+
+    const char *c_cyan = fims_ui_color(UI_COLOR_BOLD_CYAN);
+    const char *c_wht  = fims_ui_color(UI_COLOR_BOLD_WHITE);
+    const char *c_dim  = fims_ui_color(UI_COLOR_DIM);
+    const char *c_grn  = fims_ui_color(UI_COLOR_BOLD_GREEN);
+    const char *c_red  = fims_ui_color(UI_COLOR_BOLD_RED);
+    const char *c_yel  = fims_ui_color(UI_COLOR_BOLD_YELLOW);
+    const char *c_rst  = fims_ui_color(UI_COLOR_RESET);
+
+    const char *c_status = summary->is_success ? c_grn : (summary->exit_code == 3 ? c_red : c_yel);
+
+    printf("\n%s╔══════════════════════════════════════════════════════════════════════════════╗%s\n", c_cyan, c_rst);
+    printf("%s║                             EXECUTION SUMMARY                                ║%s\n", c_cyan, c_rst);
+    printf("%s╠══════════════════════════════════════════════════════════════════════════════╣%s\n", c_cyan, c_rst);
+
+    printf("  %s%-22s%s : %s%s%s\n", c_dim, "Command", c_rst, c_wht, summary->command_name ? summary->command_name : "UNKNOWN", c_rst);
+    printf("  %s%-22s%s : %s%s%s\n", c_dim, "Status", c_rst, c_status, summary->status_str ? summary->status_str : (summary->is_success ? "[ OK ] SUCCESS" : "[ FAILED ]"), c_rst);
+    printf("  %s%-22s%s : %s%d%s\n", c_dim, "Exit Code", c_rst, c_wht, summary->exit_code, c_rst);
+
+    if (summary->duration_ms > 0) {
+        printf("  %s%-22s%s : %s%.2f ms%s\n", c_dim, "Duration", c_rst, c_wht, summary->duration_ms, c_rst);
+    }
+    if (summary->target_dir && summary->target_dir[0]) {
+        printf("  %s%-22s%s : %s%s%s\n", c_dim, "Target Directory", c_rst, c_wht, summary->target_dir, c_rst);
+    }
+    if (summary->files_total > 0) {
+        printf("  %s%-22s%s : %s%zu regular files%s\n", c_dim, "Files Processed", c_rst, c_wht, summary->files_total, c_rst);
+        printf("  %s%-22s%s : %s%zu%s\n", c_dim, "  - Unchanged", c_rst, c_grn, summary->files_unchanged, c_rst);
+        if (summary->files_modified > 0) {
+            printf("  %s%-22s%s : %s%zu%s\n", c_dim, "  - Modified", c_rst, c_red, summary->files_modified, c_rst);
+        }
+        if (summary->files_added > 0) {
+            printf("  %s%-22s%s : %s%zu%s\n", c_dim, "  - Added", c_rst, c_yel, summary->files_added, c_rst);
+        }
+        if (summary->files_deleted > 0) {
+            printf("  %s%-22s%s : %s%zu%s\n", c_dim, "  - Deleted", c_rst, c_red, summary->files_deleted, c_rst);
+        }
+        if (summary->files_renamed > 0) {
+            printf("  %s%-22s%s : %s%zu%s\n", c_dim, "  - Renamed", c_rst, c_yel, summary->files_renamed, c_rst);
+        }
+        if (summary->files_perms > 0) {
+            printf("  %s%-22s%s : %s%zu%s\n", c_dim, "  - Perms Changed", c_rst, c_yel, summary->files_perms, c_rst);
+        }
+    }
+    if (summary->details && summary->details[0]) {
+        printf("  %s%-22s%s : %s%s%s\n", c_dim, "Security Details", c_rst, c_wht, summary->details, c_rst);
+    }
+    if (summary->verdict && summary->verdict[0]) {
+        printf("  %s%-22s%s : %s%s%s\n", c_dim, "Verdict", c_rst, c_status, summary->verdict, c_rst);
+    }
+
+    printf("%s╚══════════════════════════════════════════════════════════════════════════════╝%s\n\n", c_cyan, c_rst);
+}
+
 /* ============================================================================
  * Progress Indicators
  * ============================================================================ */

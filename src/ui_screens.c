@@ -236,7 +236,16 @@ void fims_screen_handle_dashboard(fims_tui_state_t *st, int ch) {
  * 2. INITIALIZE BASELINE SCREEN
  * ============================================================================ */
 
-static char g_init_target[FIMS_MAX_PATH] = "/home/madmax";
+static const char *INIT_DIR_PRESETS[] = {
+    ".",
+    "/etc",
+    "/var/log",
+    "/tmp",
+    "/home"
+};
+#define INIT_PRESET_COUNT ((int)(sizeof(INIT_DIR_PRESETS) / sizeof(INIT_DIR_PRESETS[0])))
+static int  g_init_preset_idx = 0;
+static char g_init_target[FIMS_MAX_PATH] = ".";
 static bool g_init_force = false;
 static bool g_init_add   = false;
 static int  g_init_field = 0; /* 0 = Target Dir, 1 = Force, 2 = Add, 3 = Execute */
@@ -257,18 +266,18 @@ void fims_screen_render_init(fims_tui_state_t *st) {
 
     render_box(win, 4, 2, 14, w - 4, "CONFIGURATION & TARGET PATH", CP_HEADER);
 
-    /* Field 0: Target Dir */
-    mvwprintw(win, 6, 4, "Monitored Directory : ");
+    /* Field 0: Target Dir Choice */
+    mvwprintw(win, 6, 4, "Directory Option    : ");
     if (st->focus == FOCUS_CONTENT && g_init_field == 0) {
         wattron(win, fims_color_attr(CP_BUTTON_ACT));
-        wprintw(win, "[ %-40s ]", g_init_target);
+        wprintw(win, " <  %-36s  > ", g_init_target);
         wattroff(win, fims_color_attr(CP_BUTTON_ACT));
+        mvwprintw(win, 7, 26, "[LEFT/RIGHT] Change Option | [ENTER] Custom Path");
     } else {
         wattron(win, fims_color_attr(CP_BUTTON_NORM) | A_REVERSE);
-        wprintw(win, "  %-40s  ", g_init_target);
+        wprintw(win, "    %-36s    ", g_init_target);
         wattroff(win, fims_color_attr(CP_BUTTON_NORM) | A_REVERSE);
     }
-    mvwprintw(win, 7, 26, "(Press ENTER to edit path)");
 
     /* Field 1: Force Overwrite */
     mvwprintw(win, 9, 4, "Force Overwrite     : ");
@@ -318,11 +327,21 @@ void fims_screen_handle_init(fims_tui_state_t *st, int ch) {
     } else if (ch == KEY_DOWN) {
         if (g_init_field < 3) g_init_field++;
     } else if (ch == ' ' || ch == KEY_LEFT || ch == KEY_RIGHT) {
-        if (g_init_field == 1) g_init_force = !g_init_force;
-        else if (g_init_field == 2) g_init_add = !g_init_add;
+        if (g_init_field == 0) {
+            if (ch == KEY_LEFT) {
+                g_init_preset_idx = (g_init_preset_idx - 1 + INIT_PRESET_COUNT) % INIT_PRESET_COUNT;
+            } else {
+                g_init_preset_idx = (g_init_preset_idx + 1) % INIT_PRESET_COUNT;
+            }
+            snprintf(g_init_target, sizeof(g_init_target), "%s", INIT_DIR_PRESETS[g_init_preset_idx]);
+        } else if (g_init_field == 1) {
+            g_init_force = !g_init_force;
+        } else if (g_init_field == 2) {
+            g_init_add = !g_init_add;
+        }
     } else if (ch == '\n' || ch == KEY_ENTER) {
         if (g_init_field == 0) {
-            fims_dialog_input("EDIT TARGET DIRECTORY", "Enter directory path to monitor:", g_init_target, sizeof(g_init_target));
+            fims_dialog_input("CUSTOM TARGET DIRECTORY", "Enter directory path to monitor:", g_init_target, sizeof(g_init_target));
         } else if (g_init_field == 1) {
             g_init_force = !g_init_force;
         } else if (g_init_field == 2) {
@@ -349,18 +368,22 @@ void fims_screen_handle_init(fims_tui_state_t *st, int ch) {
 
             fims_dialog_progress_draw("INITIALIZING BASELINE", "Scanning and hashing files...", 50, 100);
 
+            struct timespec t0, t1;
+            clock_gettime(CLOCK_MONOTONIC, &t0);
+
             size_t count = 0;
             fims_status_t res = fims_baseline_init_from_dir(g_init_target, st->cfg, g_init_force, &count);
+
+            clock_gettime(CLOCK_MONOTONIC, &t1);
+            double dur = (t1.tv_sec - t0.tv_sec) * 1000.0 + (t1.tv_nsec - t0.tv_nsec) / 1000000.0;
+
             if (res == FIMS_OK) {
                 fims_status_save(st->cfg->state_file, st->cfg, NULL, count, 0);
-                char msg[FIMS_MAX_PATH + 256];
-                snprintf(msg, sizeof(msg), "Baseline successfully established!\n%zu regular files securely hashed.\nBaseline stored at: %s",
-                         count, st->cfg->baseline_file);
-                fims_dialog_message("INITIALIZATION SUCCESS", msg, CP_SUCCESS);
+                fims_dialog_summary("BASELINE INITIALIZATION", true, "[ OK ] BASELINE SEALED",
+                                    count, count, 0, 0, 0, dur, g_init_target);
             } else {
-                char msg[256];
-                snprintf(msg, sizeof(msg), "Baseline initialization failed with error code %d.", (int)res);
-                fims_dialog_message("INITIALIZATION ERROR", msg, CP_ERROR);
+                fims_dialog_summary("BASELINE INITIALIZATION", false, "[ FAILED ] ERROR",
+                                    0, 0, 0, 0, 0, dur, "Baseline initialization failed");
             }
         }
     }
@@ -490,6 +513,14 @@ void fims_screen_handle_scan(fims_tui_state_t *st, int ch) {
         g_scan_del       = report.deleted_count;
         g_scan_renamed   = report.renamed_count;
         g_scan_perms     = report.perm_changed_count;
+
+        bool is_clean = (report.count == 0);
+        fims_dialog_summary("INTEGRITY SCAN", is_clean,
+                            is_clean ? "[ OK ] NO CHANGES" : "[ ALERT ] VIOLATIONS DETECTED",
+                            current.count, report.unchanged_files, report.modified_count,
+                            report.added_count, report.deleted_count,
+                            g_scan_time_ms,
+                            is_clean ? "Filesystem matches trusted baseline" : "Unapproved changes detected!");
 
         fims_report_free(&report);
         fims_file_list_free(&current);
@@ -672,7 +703,9 @@ void fims_screen_handle_baseline(fims_tui_state_t *st, int ch) {
                                       existing.root_dir_count, st->cfg, &current);
                 fims_baseline_save(st->cfg->baseline_file, &current, true);
                 fims_status_save(st->cfg->state_file, st->cfg, NULL, current.count, 0);
-                fims_dialog_message("BASELINE UPDATED", "Trusted baseline successfully updated!", CP_SUCCESS);
+                fims_dialog_summary("BASELINE UPDATE", true, "[ OK ] BASELINE REFRESHED",
+                                    current.count, current.count, 0, 0, 0, 0,
+                                    "Cryptographic baseline updated with current filesystem state");
                 fims_file_list_free(&current);
                 fims_file_list_free(&existing);
             }
@@ -943,7 +976,17 @@ void fims_screen_handle_config(fims_tui_state_t *st, int ch) {
     } else if (ch == KEY_DOWN) {
         if (g_cfg_selected < 4) g_cfg_selected++;
     } else if (ch == ' ' || ch == KEY_LEFT || ch == KEY_RIGHT) {
-        if (g_cfg_selected == 1) {
+        if (g_cfg_selected == 0) {
+            static const uint32_t INTERVALS[] = { 10, 30, 60, 120, 300 };
+            int cur = 1;
+            for (int k = 0; k < 5; k++) {
+                if (st->cfg->scan_interval_sec == INTERVALS[k]) { cur = k; break; }
+            }
+            if (ch == KEY_LEFT) cur = (cur - 1 + 5) % 5;
+            else cur = (cur + 1) % 5;
+            st->cfg->scan_interval_sec = INTERVALS[cur];
+            g_cfg_dirty = true;
+        } else if (g_cfg_selected == 1) {
             st->cfg->min_alert_severity = (st->cfg->min_alert_severity + 1) % 5;
             g_cfg_dirty = true;
         } else if (g_cfg_selected == 2) {
@@ -955,21 +998,21 @@ void fims_screen_handle_config(fims_tui_state_t *st, int ch) {
         }
     } else if (ch == '\n' || ch == KEY_ENTER) {
         if (g_cfg_selected == 0) {
-            char buf[32];
-            snprintf(buf, sizeof(buf), "%u", st->cfg->scan_interval_sec);
-            if (fims_dialog_input("SCAN INTERVAL", "Enter interval in seconds (e.g. 30):", buf, sizeof(buf))) {
-                long val = atol(buf);
-                if (val > 0) {
-                    st->cfg->scan_interval_sec = (uint32_t)val;
-                    g_cfg_dirty = true;
-                }
+            static const uint32_t INTERVALS[] = { 10, 30, 60, 120, 300 };
+            int cur = 1;
+            for (int k = 0; k < 5; k++) {
+                if (st->cfg->scan_interval_sec == INTERVALS[k]) { cur = k; break; }
             }
+            cur = (cur + 1) % 5;
+            st->cfg->scan_interval_sec = INTERVALS[cur];
+            g_cfg_dirty = true;
         } else if (g_cfg_selected == 4) {
             bool confirm = fims_dialog_confirm("SAVE CONFIGURATION", "Write updated configuration to disk?\nFile: /etc/fims/fims.conf", "Cancel", "Save");
             if (confirm) {
                 fims_config_save(st->cfg, NULL);
                 g_cfg_dirty = false;
-                fims_dialog_message("CONFIGURATION SAVED", "Settings committed to disk successfully!", CP_SUCCESS);
+                fims_dialog_summary("SAVE CONFIGURATION", true, "[ OK ] SAVED",
+                                    0, 0, 0, 0, 0, 0, "Settings committed to disk successfully");
             }
         }
     }

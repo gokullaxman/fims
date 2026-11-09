@@ -31,4 +31,19 @@ bool fims_dialog_input(const char *title, const char *prompt, char *buffer, size
  */
 void fims_dialog_progress_draw(const char *title, const char *action, size_t current, size_t total);
 
+/**
+ * Display a structured Execution Summary modal dialog in TUI mode.
+ * Dismissed with ENTER, SPACE, or ESC.
+ */
+void fims_dialog_summary(const char *cmd_name,
+                         bool is_ok,
+                         const char *status_badge,
+                         size_t scanned,
+                         size_t unchanged,
+                         size_t mod,
+                         size_t add,
+                         size_t del,
+                         double duration_ms,
+                         const char *details);
+
 #endif /* FIMS_UI_DIALOGS_H */

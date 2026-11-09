@@ -110,6 +110,32 @@ void fims_ui_alert_card(const fims_alert_t *alert);
 void fims_ui_status_box(const char *status_str, bool is_ok, const char *detail);
 
 /* ============================================================================
+ * Execution Summary Presentation
+ * ============================================================================ */
+typedef struct {
+    const char *command_name;
+    const char *status_str;
+    bool        is_success;
+    int         exit_code;
+    double      duration_ms;
+    size_t      files_total;
+    size_t      files_unchanged;
+    size_t      files_modified;
+    size_t      files_added;
+    size_t      files_deleted;
+    size_t      files_renamed;
+    size_t      files_perms;
+    const char *target_dir;
+    const char *verdict;
+    const char *details;
+} fims_execution_summary_t;
+
+/**
+ * Print a structured execution summary card after any command runs.
+ */
+void fims_ui_execution_summary(const fims_execution_summary_t *summary);
+
+/* ============================================================================
  * Progress Indicators
  * ============================================================================ */
 

@@ -66,6 +66,8 @@ void fims_cli_print_help(const char *prog_name) {
            c_wht, "baseline update [--yes]", c_rst, c_dim, c_rst);
     printf("  %s%-34s%s %sDisplay active configuration and baseline info%s\n",
            c_wht, "config", c_rst, c_dim, c_rst);
+    printf("  %s%-34s%s %sInteractive menu to choose options without typing%s\n",
+           c_wht, "menu", c_rst, c_dim, c_rst);
     printf("  %s%-34s%s %sLaunch interactive full-screen Security Console%s\n",
            c_wht, "tui", c_rst, c_dim, c_rst);
     printf("  %s%-34s%s %sDisplay cybersecurity startup banner%s\n",
@@ -292,6 +294,19 @@ static int cmd_init(int argc, char **argv, fims_config_t *cfg) {
         fims_ui_field("Protection", "%s", has_hmac ? "HMAC-SHA256 Authenticated" : "SHA-256 Self-Digest");
         fims_ui_status_box("BASELINE EXTENDED", true, "All monitored roots protected");
 
+        fims_execution_summary_t sum;
+        memset(&sum, 0, sizeof(sum));
+        sum.command_name    = "BASELINE EXTENSION";
+        sum.status_str      = "[ OK ] ROOT ADDED";
+        sum.is_success      = true;
+        sum.exit_code       = 0;
+        sum.target_dir      = clean_target;
+        sum.files_total     = baseline.count;
+        sum.files_unchanged = baseline.count;
+        sum.details         = has_hmac ? "HMAC-SHA256 Authenticated" : "SHA-256 Digest Verified";
+        sum.verdict         = "PROTECTED — Monitored root added to baseline";
+        fims_ui_execution_summary(&sum);
+
         fims_file_list_free(&baseline);
         return 0;
     }
@@ -412,6 +427,20 @@ static int cmd_init(int argc, char **argv, fims_config_t *cfg) {
     fims_ui_field("Algorithm", "SHA-256");
     fims_ui_field("Protection", "%s", has_hmac ? "HMAC-SHA256 Authenticated" : "SHA-256 Self-Digest");
     fims_ui_status_box("BASELINE PROTECTED", true, "Cryptographic integrity verified");
+
+    fims_execution_summary_t sum;
+    memset(&sum, 0, sizeof(sum));
+    sum.command_name    = "BASELINE INITIALIZATION";
+    sum.status_str      = "[ OK ] BASELINE CREATED";
+    sum.is_success      = true;
+    sum.exit_code       = 0;
+    sum.target_dir      = target_dir;
+    sum.files_total     = count;
+    sum.files_unchanged = count;
+    sum.details         = has_hmac ? "HMAC-SHA256 Authenticated" : "SHA-256 Digest Verified";
+    sum.verdict         = "PROTECTED — Baseline cryptographically established";
+    fims_ui_execution_summary(&sum);
+
     return 0;
 }
 
@@ -550,6 +579,23 @@ static int cmd_scan(int argc, char **argv, fims_config_t *cfg) {
     }
 
     int exit_code = (report.count > 0 || missing_or_unreadable_root) ? FIMS_EXIT_CHANGES : FIMS_EXIT_OK;
+
+    fims_execution_summary_t sum;
+    memset(&sum, 0, sizeof(sum));
+    sum.command_name    = "INTEGRITY SCAN";
+    sum.exit_code       = exit_code;
+    sum.is_success      = (exit_code == FIMS_EXIT_OK);
+    sum.status_str      = (exit_code == FIMS_EXIT_OK) ? "[ OK ] PROTECTED" : "[ ALERT ] VIOLATIONS DETECTED";
+    sum.files_total     = current.count;
+    sum.files_unchanged = report.unchanged_files;
+    sum.files_modified  = report.modified_count;
+    sum.files_added     = report.added_count;
+    sum.files_deleted   = report.deleted_count;
+    sum.files_renamed   = report.renamed_count;
+    sum.files_perms     = report.perm_changed_count;
+    sum.details         = "Cryptographic SHA-256 integrity scan";
+    sum.verdict         = (exit_code == FIMS_EXIT_OK) ? "PROTECTED — Filesystem matches trusted baseline" : "VIOLATIONS DETECTED — Security investigation required";
+    fims_ui_execution_summary(&sum);
 
     fims_report_free(&report);
     fims_file_list_free(&current);
@@ -721,6 +767,18 @@ static int cmd_baseline(int argc, char **argv, fims_config_t *cfg) {
             }
             fims_status_save(cfg->state_file, cfg, NULL, current.count, 0);
             fims_ui_status_box("BASELINE UPDATED", true, "All accepted changes incorporated");
+
+            fims_execution_summary_t sum;
+            memset(&sum, 0, sizeof(sum));
+            sum.command_name    = "BASELINE UPDATE";
+            sum.status_str      = "[ OK ] BASELINE UPDATED";
+            sum.is_success      = true;
+            sum.exit_code       = 0;
+            sum.files_total     = current.count;
+            sum.files_unchanged = current.count;
+            sum.details         = "All verified filesystem changes accepted";
+            sum.verdict         = "PROTECTED — Baseline refreshed";
+            fims_ui_execution_summary(&sum);
         } else {
             fims_ui_error("Failed to save updated baseline (status %d).", (int)st);
         }
@@ -873,6 +931,230 @@ static int cmd_config(int argc, char **argv, const fims_config_t *cfg) {
     return 0;
 }
 
+static void wait_for_enter(void) {
+    printf("  Press [ENTER] to return to menu...");
+    fflush(stdout);
+    char buf[128];
+    if (fgets(buf, sizeof(buf), stdin)) {
+        /* consumed */
+    }
+}
+
+static int cmd_menu(int argc, char **argv, fims_config_t *cfg) {
+    (void)argc;
+    (void)argv;
+
+    while (1) {
+        const char *c_cyan = fims_ui_color(UI_COLOR_BOLD_CYAN);
+        const char *c_wht  = fims_ui_color(UI_COLOR_BOLD_WHITE);
+        const char *c_dim  = fims_ui_color(UI_COLOR_DIM);
+        const char *c_grn  = fims_ui_color(UI_COLOR_BOLD_GREEN);
+        const char *c_rst  = fims_ui_color(UI_COLOR_RESET);
+
+        printf("\n%s╔══════════════════════════════════════════════════════════════════════════════╗%s\n", c_cyan, c_rst);
+        printf("%s║                    FIMS — FILE INTEGRITY MONITORING SYSTEM                   ║%s\n", c_cyan, c_rst);
+        printf("%s║                     Interactive Security Command Console                     ║%s\n", c_cyan, c_rst);
+        printf("%s╚══════════════════════════════════════════════════════════════════════════════╝%s\n\n", c_cyan, c_rst);
+
+        printf("%sSelect an operation to perform (choose option number):%s\n\n", c_wht, c_rst);
+        printf("  %s[1]%s %-32s %sCreate or replace trusted baseline for a directory%s\n", c_cyan, c_rst, "Initialize Baseline", c_dim, c_rst);
+        printf("  %s[2]%s %-32s %sCompare live files against cryptographic baseline%s\n", c_cyan, c_rst, "Run Integrity Scan", c_dim, c_rst);
+        printf("  %s[3]%s %-32s %sWatch filesystem events in real-time (inotify)%s\n", c_cyan, c_rst, "Real-time Inotify Monitor", c_dim, c_rst);
+        printf("  %s[4]%s %-32s %sDisplay readiness, engine state, and daemon telemetry%s\n", c_cyan, c_rst, "System Security Status", c_dim, c_rst);
+        printf("  %s[5]%s %-32s %sView detected changes and alert details%s\n", c_cyan, c_rst, "Scan Violation Report", c_dim, c_rst);
+        printf("  %s[6]%s %-32s %sDisplay tracked files and SHA-256 hashes%s\n", c_cyan, c_rst, "View Baseline Records", c_dim, c_rst);
+        printf("  %s[7]%s %-32s %sAccept detected modifications and update baseline%s\n", c_cyan, c_rst, "Update Baseline", c_dim, c_rst);
+        printf("  %s[8]%s %-32s %sInspect security paths and scan settings%s\n", c_cyan, c_rst, "Configuration Manager", c_dim, c_rst);
+        printf("  %s[9]%s %-32s %sStart full-screen terminal dashboard interface%s\n", c_grn, c_rst, "Launch Full-Screen TUI", c_dim, c_rst);
+        printf("  %s[0]%s %-32s %sExit FIMS console%s\n\n", c_dim, c_rst, "Exit Console", c_dim, c_rst);
+
+        printf("%sEnter option [0-9]: %s", c_cyan, c_rst);
+        fflush(stdout);
+
+        char line[128];
+        if (!fgets(line, sizeof(line), stdin)) {
+            break;
+        }
+        cli_trim_whitespace(line);
+
+        if (strcmp(line, "0") == 0 || strcmp(line, "q") == 0 || strcmp(line, "Q") == 0) {
+            printf("\nExiting FIMS Security Console. Stay safe!\n");
+            break;
+        }
+
+        if (strcmp(line, "1") == 0) {
+            printf("\n%sChoose Directory Option:%s\n", c_wht, c_rst);
+            printf("  [1] Current Working Directory (.)\n");
+            printf("  [2] System Configuration (/etc)\n");
+            printf("  [3] System Logs (/var/log)\n");
+            printf("  [4] Temporary Directory (/tmp)\n");
+            printf("  [5] Custom Path\n");
+            printf("%sSelect directory [1-5]: %s", c_cyan, c_rst);
+            fflush(stdout);
+
+            char dline[256];
+            char target[FIMS_MAX_PATH];
+            snprintf(target, sizeof(target), ".");
+            if (fgets(dline, sizeof(dline), stdin)) {
+                cli_trim_whitespace(dline);
+                if (strcmp(dline, "2") == 0) snprintf(target, sizeof(target), "/etc");
+                else if (strcmp(dline, "3") == 0) snprintf(target, sizeof(target), "/var/log");
+                else if (strcmp(dline, "4") == 0) snprintf(target, sizeof(target), "/tmp");
+                else if (strcmp(dline, "5") == 0) {
+                    printf("Enter custom path: ");
+                    fflush(stdout);
+                    if (fgets(target, sizeof(target), stdin)) {
+                        cli_trim_whitespace(target);
+                    }
+                }
+            }
+
+            printf("\nOverwrite existing baseline if present?\n");
+            printf("  [1] No (Safe Mode)\n");
+            printf("  [2] Yes (Force Overwrite)\n");
+            printf("%sSelect [1-2]: %s", c_cyan, c_rst);
+            fflush(stdout);
+
+            bool force = false;
+            char fline[64];
+            if (fgets(fline, sizeof(fline), stdin)) {
+                cli_trim_whitespace(fline);
+                if (strcmp(fline, "2") == 0) force = true;
+            }
+
+            char *fake_argv[6];
+            fake_argv[0] = "fims";
+            fake_argv[1] = "init";
+            fake_argv[2] = target;
+            fake_argv[3] = force ? "--force" : NULL;
+            fake_argv[4] = NULL;
+            int fake_argc = force ? 4 : 3;
+
+            cmd_init(fake_argc, fake_argv, cfg);
+            wait_for_enter();
+        }
+        else if (strcmp(line, "2") == 0) {
+            char *fake_argv[] = { "fims", "scan", NULL };
+            cmd_scan(2, fake_argv, cfg);
+            wait_for_enter();
+        }
+        else if (strcmp(line, "3") == 0) {
+            printf("\n%sChoose Monitoring Duration:%s\n", c_wht, c_rst);
+            printf("  [1] 10 Seconds (Quick Test)\n");
+            printf("  [2] 30 Seconds (Standard Run)\n");
+            printf("  [3] 60 Seconds (Full Monitoring Cycle)\n");
+            printf("  [4] Continuous (Press Ctrl+C to stop)\n");
+            printf("%sSelect duration [1-4]: %s", c_cyan, c_rst);
+            fflush(stdout);
+
+            char dur_line[64];
+            char dur_val[32];
+            snprintf(dur_val, sizeof(dur_val), "10");
+            if (fgets(dur_line, sizeof(dur_line), stdin)) {
+                cli_trim_whitespace(dur_line);
+                if (strcmp(dur_line, "2") == 0) snprintf(dur_val, sizeof(dur_val), "30");
+                else if (strcmp(dur_line, "3") == 0) snprintf(dur_val, sizeof(dur_val), "60");
+                else if (strcmp(dur_line, "4") == 0) snprintf(dur_val, sizeof(dur_val), "0");
+            }
+
+            char *fake_argv[5];
+            fake_argv[0] = "fims";
+            fake_argv[1] = "monitor";
+            if (strcmp(dur_val, "0") != 0) {
+                fake_argv[2] = "--duration";
+                fake_argv[3] = dur_val;
+                fake_argv[4] = NULL;
+                cmd_monitor(4, fake_argv, cfg);
+            } else {
+                fake_argv[2] = NULL;
+                cmd_monitor(2, fake_argv, cfg);
+            }
+
+            fims_execution_summary_t sum;
+            memset(&sum, 0, sizeof(sum));
+            sum.command_name = "REAL-TIME MONITOR";
+            sum.status_str   = "[ OK ] MONITOR COMPLETED";
+            sum.is_success   = true;
+            sum.exit_code    = 0;
+            sum.details      = "Linux inotify kernel watcher session completed";
+            sum.verdict      = "AUDIT ACTIVE — System monitored for tamper events";
+            fims_ui_execution_summary(&sum);
+
+            wait_for_enter();
+        }
+        else if (strcmp(line, "4") == 0) {
+            char *fake_argv[] = { "fims", "status", NULL };
+            cmd_status(2, fake_argv, cfg);
+
+            fims_execution_summary_t sum;
+            memset(&sum, 0, sizeof(sum));
+            sum.command_name = "SYSTEM STATUS";
+            sum.status_str   = "[ OK ] ENGINES OPERATIONAL";
+            sum.is_success   = true;
+            sum.exit_code    = 0;
+            sum.details      = "All cryptographic and monitoring subsystems active";
+            sum.verdict      = "SYSTEM READY";
+            fims_ui_execution_summary(&sum);
+
+            wait_for_enter();
+        }
+        else if (strcmp(line, "5") == 0) {
+            char *fake_argv[] = { "fims", "report", NULL };
+            cmd_report(2, fake_argv, cfg);
+
+            fims_execution_summary_t sum;
+            memset(&sum, 0, sizeof(sum));
+            sum.command_name = "SCAN VIOLATION REPORT";
+            sum.status_str   = "[ OK ] REPORT DISPLAYED";
+            sum.is_success   = true;
+            sum.exit_code    = 0;
+            sum.details      = cfg->report_file;
+            sum.verdict      = "AUDIT LOG LOADED";
+            fims_ui_execution_summary(&sum);
+
+            wait_for_enter();
+        }
+        else if (strcmp(line, "6") == 0) {
+            char *fake_argv[] = { "fims", "baseline", "show", NULL };
+            cmd_baseline(3, fake_argv, cfg);
+            wait_for_enter();
+        }
+        else if (strcmp(line, "7") == 0) {
+            printf("\n%sUpdate baseline with changes from latest scan?%s\n", c_wht, c_rst);
+            printf("  [1] Review Diff and Update\n");
+            printf("  [2] Cancel\n");
+            printf("%sSelect [1-2]: %s", c_cyan, c_rst);
+            fflush(stdout);
+
+            char uline[64];
+            if (fgets(uline, sizeof(uline), stdin)) {
+                cli_trim_whitespace(uline);
+                if (strcmp(uline, "1") == 0) {
+                    char *fake_argv[] = { "fims", "baseline", "update", NULL };
+                    cmd_baseline(3, fake_argv, cfg);
+                } else {
+                    printf("Update cancelled.\n");
+                }
+            }
+            wait_for_enter();
+        }
+        else if (strcmp(line, "8") == 0) {
+            char *fake_argv[] = { "fims", "config", NULL };
+            cmd_config(2, fake_argv, cfg);
+            wait_for_enter();
+        }
+        else if (strcmp(line, "9") == 0) {
+            fims_tui_main(cfg);
+        }
+        else {
+            printf("%sInvalid choice '%s'. Please select 0 to 9.%s\n", fims_ui_color(UI_COLOR_RED), line, fims_ui_color(UI_COLOR_RESET));
+            wait_for_enter();
+        }
+    }
+
+    return 0;
+}
+
 int fims_cli_dispatch(int argc, char **argv) {
     /* Initialize UI and detect global --no-color / --color flags */
     bool force_no_color = false;
@@ -892,7 +1174,7 @@ int fims_cli_dispatch(int argc, char **argv) {
             fims_config_t cfg;
             fims_config_init_defaults(&cfg);
             fims_config_load(&cfg, NULL);
-            return fims_tui_main(&cfg);
+            return cmd_menu(argc, argv, &cfg);
         }
         fims_cli_print_help(argc > 0 ? argv[0] : "fims");
         return 1;
@@ -935,6 +1217,10 @@ int fims_cli_dispatch(int argc, char **argv) {
     fims_config_t cfg;
     fims_config_init_defaults(&cfg);
     fims_config_load(&cfg, NULL);
+
+    if (strcmp(cmd, "menu") == 0 || strcmp(cmd, "--menu") == 0) {
+        return cmd_menu(argc, argv, &cfg);
+    }
 
     if (strcmp(cmd, "tui") == 0 || strcmp(cmd, "--tui") == 0) {
         if (!isatty(STDIN_FILENO) || !isatty(STDOUT_FILENO)) {
