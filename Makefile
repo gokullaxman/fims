@@ -1,6 +1,6 @@
 CC      = gcc
 CFLAGS  = -Wall -Wextra -Werror -pedantic -std=c11 -O2 -Iinclude
-LDFLAGS = -lcrypto -lpthread
+LDFLAGS = -lcrypto -lpthread -lncursesw
 
 TARGET  = fims
 SRCDIR  = src
@@ -15,7 +15,11 @@ CORE_SRCS = $(SRCDIR)/config.c \
             $(SRCDIR)/monitor.c \
             $(SRCDIR)/escape.c \
             $(SRCDIR)/ui.c \
-            $(SRCDIR)/cli.c
+            $(SRCDIR)/cli.c \
+            $(SRCDIR)/ui_colors.c \
+            $(SRCDIR)/ui_dialogs.c \
+            $(SRCDIR)/ui_screens.c \
+            $(SRCDIR)/ui_tui.c
 
 CORE_OBJS = $(CORE_SRCS:.c=.o)
 MAIN_OBJ  = $(SRCDIR)/main.o

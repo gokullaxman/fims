@@ -6,6 +6,7 @@
 #include "monitor.h"
 #include "logger.h"
 #include "ui.h"
+#include "ui_tui.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -65,6 +66,8 @@ void fims_cli_print_help(const char *prog_name) {
            c_wht, "baseline update [--yes]", c_rst, c_dim, c_rst);
     printf("  %s%-34s%s %sDisplay active configuration and baseline info%s\n",
            c_wht, "config", c_rst, c_dim, c_rst);
+    printf("  %s%-34s%s %sLaunch interactive full-screen Security Console%s\n",
+           c_wht, "tui", c_rst, c_dim, c_rst);
     printf("  %s%-34s%s %sDisplay cybersecurity startup banner%s\n",
            c_wht, "banner", c_rst, c_dim, c_rst);
     printf("  %s%-34s%s %sDisplay this usage guide%s\n",
@@ -885,6 +888,12 @@ int fims_cli_dispatch(int argc, char **argv) {
     fims_ui_init(force_no_color, force_color);
 
     if (argc < 2) {
+        if (isatty(STDIN_FILENO) && isatty(STDOUT_FILENO)) {
+            fims_config_t cfg;
+            fims_config_init_defaults(&cfg);
+            fims_config_load(&cfg, NULL);
+            return fims_tui_main(&cfg);
+        }
         fims_cli_print_help(argc > 0 ? argv[0] : "fims");
         return 1;
     }
@@ -926,6 +935,14 @@ int fims_cli_dispatch(int argc, char **argv) {
     fims_config_t cfg;
     fims_config_init_defaults(&cfg);
     fims_config_load(&cfg, NULL);
+
+    if (strcmp(cmd, "tui") == 0 || strcmp(cmd, "--tui") == 0) {
+        if (!isatty(STDIN_FILENO) || !isatty(STDOUT_FILENO)) {
+            fims_ui_error("TUI requires an interactive terminal (TTY)");
+            return 1;
+        }
+        return fims_tui_main(&cfg);
+    }
 
     if (strcmp(cmd, "init") == 0) {
         return cmd_init(argc, argv, &cfg);
