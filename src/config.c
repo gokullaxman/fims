@@ -1,5 +1,8 @@
 #include "config.h"
 
+#define _POSIX_C_SOURCE 200809L
+#define _XOPEN_SOURCE 700
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,6 +11,10 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <pwd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fnmatch.h>
 
 static void safe_copy_str(char *dst, size_t dst_size, const char *src) {
     if (!dst || dst_size == 0) return;
@@ -32,6 +39,59 @@ static void trim_whitespace(char *str) {
         str[len - 1] = '\0';
         len--;
     }
+}
+
+static const char *get_env_override(const char *name1, const char *name2) {
+    const char *v = getenv(name1);
+    if (v && v[0] != '\0') return v;
+    if (name2) {
+        v = getenv(name2);
+        if (v && v[0] != '\0') return v;
+    }
+    return NULL;
+}
+
+static void get_user_fallback_dir(char *state_dir, size_t state_sz, char *conf_dir, size_t conf_sz) {
+    const char *home = getenv("HOME");
+    if (!home || home[0] == '\0') {
+        struct passwd *pw = getpwuid(geteuid());
+        if (pw && pw->pw_dir) {
+            home = pw->pw_dir;
+        }
+    }
+    if (!home || home[0] == '\0') {
+        home = "/tmp";
+    }
+    snprintf(state_dir, state_sz, "%s/.local/state/fims", home);
+    snprintf(conf_dir, conf_sz, "%s/.config/fims", home);
+}
+
+fims_status_t fims_check_file_security(const char *path) {
+    if (!path || path[0] == '\0') {
+        return FIMS_ERR_INVALID_ARG;
+    }
+
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        if (errno == ENOENT) return FIMS_ERR_NOT_FOUND;
+        if (errno == EACCES || errno == EPERM) return FIMS_ERR_PERMISSION;
+        return FIMS_ERR_IO;
+    }
+
+    if (!S_ISREG(st.st_mode)) {
+        return FIMS_ERR_PERMISSION;
+    }
+
+    uid_t euid = geteuid();
+    if (st.st_uid != euid && st.st_uid != 0) {
+        return FIMS_ERR_PERMISSION;
+    }
+
+    if (st.st_mode & 0022) {
+        return FIMS_ERR_PERMISSION;
+    }
+
+    return FIMS_OK;
 }
 
 fims_status_t fims_sanitize_path(const char *input_path, char *out_path, size_t out_size) {
@@ -98,26 +158,61 @@ void fims_config_init_defaults(fims_config_t *cfg) {
     cfg->follow_symlinks = false;
     cfg->detect_renames = true;
 
-    const char *env_base = getenv("FIMS_BASELINE_PATH");
-    const char *env_log = getenv("FIMS_LOG_PATH");
-    const char *env_rep = getenv("FIMS_REPORT_PATH");
-    const char *env_state = getenv("FIMS_STATE_PATH");
-    const char *env_cfg = getenv("FIMS_CONFIG_PATH");
+    bool use_user_fallback = false;
+    if (geteuid() != 0) {
+        use_user_fallback = true;
+    } else {
+        if (access("/var/lib", W_OK) != 0 || access("/var/log", W_OK) != 0) {
+            use_user_fallback = true;
+        }
+    }
 
-    safe_copy_str(cfg->baseline_file, sizeof(cfg->baseline_file), env_base ? env_base : FIMS_DEFAULT_BASELINE);
-    safe_copy_str(cfg->log_file, sizeof(cfg->log_file), env_log ? env_log : FIMS_DEFAULT_LOG);
-    safe_copy_str(cfg->report_file, sizeof(cfg->report_file), env_rep ? env_rep : FIMS_DEFAULT_REPORT);
-    safe_copy_str(cfg->state_file, sizeof(cfg->state_file), env_state ? env_state : FIMS_DEFAULT_STATE);
-    safe_copy_str(cfg->config_file, sizeof(cfg->config_file), env_cfg ? env_cfg : FIMS_DEFAULT_CONFIG);
+    char def_base[FIMS_MAX_PATH];
+    char def_log[FIMS_MAX_PATH];
+    char def_rep[FIMS_MAX_PATH];
+    char def_state[FIMS_MAX_PATH];
+    char def_cfg[FIMS_MAX_PATH];
 
-    /* Default exclusions: FIMS internal data/log directories and .git */
+    if (use_user_fallback) {
+        char state_dir[FIMS_MAX_PATH];
+        char conf_dir[FIMS_MAX_PATH];
+        get_user_fallback_dir(state_dir, sizeof(state_dir), conf_dir, sizeof(conf_dir));
+
+        fims_path_join(def_base, sizeof(def_base), state_dir, "baseline.dat");
+        fims_path_join(def_log, sizeof(def_log), state_dir, "fims.log");
+        fims_path_join(def_rep, sizeof(def_rep), state_dir, "last_report.dat");
+        fims_path_join(def_state, sizeof(def_state), state_dir, "status.dat");
+        fims_path_join(def_cfg, sizeof(def_cfg), conf_dir, "fims.conf");
+    } else {
+        safe_copy_str(def_base, sizeof(def_base), FIMS_DEFAULT_BASELINE);
+        safe_copy_str(def_log, sizeof(def_log), FIMS_DEFAULT_LOG);
+        safe_copy_str(def_rep, sizeof(def_rep), FIMS_DEFAULT_REPORT);
+        safe_copy_str(def_state, sizeof(def_state), FIMS_DEFAULT_STATE);
+        safe_copy_str(def_cfg, sizeof(def_cfg), FIMS_DEFAULT_CONFIG);
+    }
+
+    const char *env_base = get_env_override("FIMS_BASELINE_FILE", "FIMS_BASELINE_PATH");
+    const char *env_log  = get_env_override("FIMS_LOG_FILE", "FIMS_LOG_PATH");
+    const char *env_rep  = get_env_override("FIMS_REPORT_FILE", "FIMS_REPORT_PATH");
+    const char *env_state= get_env_override("FIMS_STATE_FILE", "FIMS_STATE_PATH");
+    const char *env_cfg  = get_env_override("FIMS_CONFIG_FILE", "FIMS_CONFIG_PATH");
+
+    safe_copy_str(cfg->baseline_file, sizeof(cfg->baseline_file), env_base ? env_base : def_base);
+    safe_copy_str(cfg->log_file, sizeof(cfg->log_file), env_log ? env_log : def_log);
+    safe_copy_str(cfg->report_file, sizeof(cfg->report_file), env_rep ? env_rep : def_rep);
+    safe_copy_str(cfg->state_file, sizeof(cfg->state_file), env_state ? env_state : def_state);
+    safe_copy_str(cfg->config_file, sizeof(cfg->config_file), env_cfg ? env_cfg : def_cfg);
+
+    /* Default exclusions: FIMS internal files only (NO .git by default!) */
     fims_config_add_exclude(cfg, cfg->baseline_file);
     fims_config_add_exclude(cfg, cfg->log_file);
-    fims_config_add_exclude(cfg, ".git");
+    fims_config_add_exclude(cfg, cfg->report_file);
+    fims_config_add_exclude(cfg, cfg->state_file);
+    fims_config_add_exclude(cfg, cfg->config_file);
 }
 
 fims_status_t fims_config_add_dir(fims_config_t *cfg, const char *dir_path) {
-    if (!cfg || !dir_path) return FIMS_ERR_INVALID_ARG;
+    if (!cfg || !dir_path || dir_path[0] == '\0') return FIMS_ERR_INVALID_ARG;
     if (cfg->monitored_dir_count >= FIMS_MAX_DIRS) return FIMS_ERR_NOMEM;
 
     char clean[FIMS_MAX_PATH];
@@ -167,6 +262,25 @@ fims_status_t fims_config_add_exclude(fims_config_t *cfg, const char *exclude_pa
     }
 
     safe_copy_str(cfg->excluded_paths[cfg->excluded_count], FIMS_MAX_PATH, clean);
+    cfg->excluded_count++;
+    return FIMS_OK;
+}
+
+fims_status_t fims_config_add_exclude_glob(fims_config_t *cfg, const char *pattern) {
+    if (!cfg || !pattern || pattern[0] == '\0') return FIMS_ERR_INVALID_ARG;
+    if (cfg->excluded_count >= FIMS_MAX_EXCLUDES) return FIMS_ERR_NOMEM;
+
+    char buf[FIMS_MAX_PATH];
+    int n = snprintf(buf, sizeof(buf), "glob:%s", pattern);
+    if (n < 0 || (size_t)n >= sizeof(buf)) return FIMS_ERR_INVALID_ARG;
+
+    for (size_t i = 0; i < cfg->excluded_count; i++) {
+        if (strcmp(cfg->excluded_paths[i], buf) == 0) {
+            return FIMS_OK;
+        }
+    }
+
+    safe_copy_str(cfg->excluded_paths[cfg->excluded_count], FIMS_MAX_PATH, buf);
     cfg->excluded_count++;
     return FIMS_OK;
 }
@@ -246,13 +360,14 @@ bool fims_config_is_excluded(const fims_config_t *cfg, const char *path) {
     if (cfg->report_file[0] != '\0' && matches_exact_or_dir_prefix(path, cfg->report_file)) {
         return true;
     }
-    if (cfg->state_file[0] != '\0' && matches_exact_or_dir_prefix(path, cfg->state_file)) {
-        return true;
+    if (cfg->state_file[0] != '\0') {
+        if (matches_exact_or_dir_prefix(path, cfg->state_file)) return true;
+        if (matches_baseline_tmp(path, cfg->state_file)) return true;
     }
     if (cfg->config_file[0] != '\0') {
         if (matches_exact_or_dir_prefix(path, cfg->config_file)) return true;
     } else {
-        const char *env_cfg = getenv("FIMS_CONFIG_PATH");
+        const char *env_cfg = get_env_override("FIMS_CONFIG_FILE", "FIMS_CONFIG_PATH");
         if (matches_exact_or_dir_prefix(path, env_cfg ? env_cfg : FIMS_DEFAULT_CONFIG)) return true;
     }
 
@@ -260,11 +375,17 @@ bool fims_config_is_excluded(const fims_config_t *cfg, const char *path) {
     for (size_t i = 0; i < cfg->excluded_count; i++) {
         const char *ex = cfg->excluded_paths[i];
         if (ex[0] == '\0') continue;
-        if (matches_exact_or_dir_prefix(path, ex)) return true;
 
-        const char *base = strrchr(path, '/');
-        if (base && strcmp(base + 1, ex) == 0) {
-            return true;
+        if (strncmp(ex, "glob:", 5) == 0) {
+            const char *pattern = ex + 5;
+            if (fnmatch(pattern, path, 0) == 0) return true;
+            const char *base = strrchr(path, '/');
+            if (base && fnmatch(pattern, base + 1, 0) == 0) return true;
+        } else {
+            /* Only exclude exact absolute paths or directory prefixes matching on a '/' boundary */
+            if (matches_exact_or_dir_prefix(path, ex)) {
+                return true;
+            }
         }
     }
     return false;
@@ -272,13 +393,40 @@ bool fims_config_is_excluded(const fims_config_t *cfg, const char *path) {
 
 fims_status_t fims_config_load(fims_config_t *cfg, const char *config_path) {
     if (!cfg) return FIMS_ERR_INVALID_ARG;
-    const char *path = config_path ? config_path : getenv("FIMS_CONFIG_PATH");
-    if (!path) path = FIMS_DEFAULT_CONFIG;
+    const char *path = config_path ? config_path : get_env_override("FIMS_CONFIG_FILE", "FIMS_CONFIG_PATH");
+    if (!path) path = (cfg->config_file[0] != '\0') ? cfg->config_file : FIMS_DEFAULT_CONFIG;
     safe_copy_str(cfg->config_file, sizeof(cfg->config_file), path);
 
-    FILE *fp = fopen(path, "r");
+    int fd = open(path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+    if (fd < 0) {
+        if (errno == ENOENT) return FIMS_ERR_NOT_FOUND;
+        if (errno == EACCES || errno == EPERM || errno == ELOOP) return FIMS_ERR_PERMISSION;
+        return FIMS_ERR_IO;
+    }
+
+    struct stat st;
+    if (fstat(fd, &st) != 0) {
+        close(fd);
+        return FIMS_ERR_IO;
+    }
+    if (!S_ISREG(st.st_mode)) {
+        close(fd);
+        return FIMS_ERR_PERMISSION;
+    }
+    uid_t euid = geteuid();
+    if (st.st_uid != euid && st.st_uid != 0) {
+        close(fd);
+        return FIMS_ERR_PERMISSION;
+    }
+    if (st.st_mode & 0022) {
+        close(fd);
+        return FIMS_ERR_PERMISSION;
+    }
+
+    FILE *fp = fdopen(fd, "r");
     if (!fp) {
-        return FIMS_ERR_NOT_FOUND;
+        close(fd);
+        return FIMS_ERR_IO;
     }
 
     char line[FIMS_MAX_LINE];
@@ -298,6 +446,8 @@ fims_status_t fims_config_load(fims_config_t *cfg, const char *config_path) {
             fims_config_add_dir(cfg, val);
         } else if (strcmp(key, "exclude_path") == 0) {
             fims_config_add_exclude(cfg, val);
+        } else if (strcmp(key, "exclude_glob") == 0) {
+            fims_config_add_exclude_glob(cfg, val);
         } else if (strcmp(key, "scan_interval_sec") == 0) {
             long v = strtol(val, NULL, 10);
             if (v > 0 && v <= 86400) cfg->scan_interval_sec = (uint32_t)v;
@@ -307,27 +457,58 @@ fims_status_t fims_config_load(fims_config_t *cfg, const char *config_path) {
             safe_copy_str(cfg->baseline_file, sizeof(cfg->baseline_file), val);
         } else if (strcmp(key, "report_file") == 0) {
             safe_copy_str(cfg->report_file, sizeof(cfg->report_file), val);
+        } else if (strcmp(key, "state_file") == 0) {
+            safe_copy_str(cfg->state_file, sizeof(cfg->state_file), val);
         } else if (strcmp(key, "monitor_mode") == 0) {
             if (strcmp(val, "passive") == 0) cfg->monitor_mode = MODE_PASSIVE_SCAN;
             else if (strcmp(val, "realtime") == 0) cfg->monitor_mode = MODE_REALTIME_INOTIFY;
             else cfg->monitor_mode = MODE_HYBRID;
-        } else if (strcmp(key, "alert_threshold") == 0) {
+        } else if (strcmp(key, "min_alert_severity") == 0) {
+            if (strcmp(val, "info") == 0) cfg->min_alert_severity = SEV_INFO;
+            else if (strcmp(val, "low") == 0) cfg->min_alert_severity = SEV_LOW;
+            else if (strcmp(val, "medium") == 0) cfg->min_alert_severity = SEV_MEDIUM;
+            else if (strcmp(val, "high") == 0) cfg->min_alert_severity = SEV_HIGH;
+            else if (strcmp(val, "critical") == 0) cfg->min_alert_severity = SEV_CRITICAL;
+        } else if (strcmp(key, "alert_threshold") == 0 || strcmp(key, "alert_threshold_count") == 0) {
             long v = strtol(val, NULL, 10);
-            if (v > 0) cfg->alert_threshold_count = (uint32_t)v;
+            if (v >= 0) cfg->alert_threshold_count = (uint32_t)v;
+        } else if (strcmp(key, "follow_symlinks") == 0) {
+            cfg->follow_symlinks = (strcmp(val, "true") == 0 || strcmp(val, "1") == 0);
         } else if (strcmp(key, "detect_renames") == 0) {
             cfg->detect_renames = (strcmp(val, "true") == 0 || strcmp(val, "1") == 0);
         }
     }
 
     fclose(fp);
+
+    /* Also verify baseline_file security if it exists */
+    if (cfg->baseline_file[0] != '\0' && access(cfg->baseline_file, F_OK) == 0) {
+        fims_status_t b_sec = fims_check_file_security(cfg->baseline_file);
+        if (b_sec != FIMS_OK) {
+            return b_sec;
+        }
+    }
+
     return FIMS_OK;
+}
+
+static void ensure_parent_dir_config(const char *file_path) {
+    if (!file_path) return;
+    char tmp[FIMS_MAX_PATH];
+    safe_copy_str(tmp, sizeof(tmp), file_path);
+    char *slash = strrchr(tmp, '/');
+    if (slash && slash != tmp) {
+        *slash = '\0';
+        mkdir(tmp, 0700);
+    }
 }
 
 fims_status_t fims_config_save(const fims_config_t *cfg, const char *config_path) {
     if (!cfg) return FIMS_ERR_INVALID_ARG;
-    const char *path = config_path ? config_path : getenv("FIMS_CONFIG_PATH");
-    if (!path) path = FIMS_DEFAULT_CONFIG;
+    const char *path = config_path ? config_path : get_env_override("FIMS_CONFIG_FILE", "FIMS_CONFIG_PATH");
+    if (!path) path = (cfg->config_file[0] != '\0') ? cfg->config_file : FIMS_DEFAULT_CONFIG;
 
+    ensure_parent_dir_config(path);
     int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW | O_CLOEXEC, 0600);
     if (fd < 0) return FIMS_ERR_IO;
 
@@ -342,16 +523,31 @@ fims_status_t fims_config_save(const fims_config_t *cfg, const char *config_path
         fprintf(fp, "monitored_dir = %s\n", cfg->monitored_dirs[i]);
     }
     for (size_t i = 0; i < cfg->excluded_count; i++) {
-        fprintf(fp, "exclude_path = %s\n", cfg->excluded_paths[i]);
+        if (strncmp(cfg->excluded_paths[i], "glob:", 5) == 0) {
+            fprintf(fp, "exclude_glob = %s\n", cfg->excluded_paths[i] + 5);
+        } else {
+            fprintf(fp, "exclude_path = %s\n", cfg->excluded_paths[i]);
+        }
     }
     fprintf(fp, "scan_interval_sec = %u\n", cfg->scan_interval_sec);
     fprintf(fp, "log_file = %s\n", cfg->log_file);
     fprintf(fp, "baseline_file = %s\n", cfg->baseline_file);
     fprintf(fp, "report_file = %s\n", cfg->report_file);
+    fprintf(fp, "state_file = %s\n", cfg->state_file);
     fprintf(fp, "monitor_mode = %s\n",
             cfg->monitor_mode == MODE_PASSIVE_SCAN ? "passive" :
             (cfg->monitor_mode == MODE_REALTIME_INOTIFY ? "realtime" : "hybrid"));
+    const char *sev_str = "low";
+    switch (cfg->min_alert_severity) {
+        case SEV_INFO:     sev_str = "info"; break;
+        case SEV_LOW:      sev_str = "low"; break;
+        case SEV_MEDIUM:   sev_str = "medium"; break;
+        case SEV_HIGH:     sev_str = "high"; break;
+        case SEV_CRITICAL: sev_str = "critical"; break;
+    }
+    fprintf(fp, "min_alert_severity = %s\n", sev_str);
     fprintf(fp, "alert_threshold = %u\n", cfg->alert_threshold_count);
+    fprintf(fp, "follow_symlinks = %s\n", cfg->follow_symlinks ? "true" : "false");
     fprintf(fp, "detect_renames = %s\n", cfg->detect_renames ? "true" : "false");
 
     fclose(fp);
@@ -365,11 +561,18 @@ void fims_config_print(const fims_config_t *cfg) {
     printf("============================================================\n");
     printf(" Baseline File       : %s\n", cfg->baseline_file);
     printf(" Log File            : %s\n", cfg->log_file);
+    printf(" State File          : %s\n", cfg->state_file);
     printf(" Last Report File    : %s\n", cfg->report_file);
+    printf(" Config File         : %s\n", cfg->config_file);
     printf(" Monitoring Mode     : %s\n",
            cfg->monitor_mode == MODE_PASSIVE_SCAN ? "PASSIVE_SCAN" :
            (cfg->monitor_mode == MODE_REALTIME_INOTIFY ? "REALTIME_INOTIFY" : "HYBRID (inotify + periodic scan)"));
     printf(" Scan Interval       : %u seconds\n", cfg->scan_interval_sec);
+    printf(" Min Alert Severity  : %s\n",
+           cfg->min_alert_severity == SEV_INFO ? "INFO" :
+           (cfg->min_alert_severity == SEV_LOW ? "LOW" :
+           (cfg->min_alert_severity == SEV_MEDIUM ? "MEDIUM" :
+           (cfg->min_alert_severity == SEV_HIGH ? "HIGH" : "CRITICAL"))));
     printf(" Alert Threshold     : %u events/scan\n", cfg->alert_threshold_count);
     printf(" Follow Symlinks     : %s (safe loop prevention active)\n", cfg->follow_symlinks ? "YES" : "NO");
     printf(" Rename Detection    : %s\n", cfg->detect_renames ? "ENABLED" : "DISABLED");
@@ -383,7 +586,11 @@ void fims_config_print(const fims_config_t *cfg) {
     }
     printf(" Excluded Paths (%zu)  :\n", cfg->excluded_count);
     for (size_t i = 0; i < cfg->excluded_count; i++) {
-        printf("   - %s\n", cfg->excluded_paths[i]);
+        if (strncmp(cfg->excluded_paths[i], "glob:", 5) == 0) {
+            printf("   - (glob) %s\n", cfg->excluded_paths[i] + 5);
+        } else {
+            printf("   - %s\n", cfg->excluded_paths[i]);
+        }
     }
     printf("============================================================\n");
 }

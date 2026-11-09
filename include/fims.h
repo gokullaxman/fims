@@ -1,8 +1,12 @@
 #ifndef FIMS_H
 #define FIMS_H
 
+#ifndef _POSIX_C_SOURCE
 #define _POSIX_C_SOURCE 200809L
+#endif
+#ifndef _XOPEN_SOURCE
 #define _XOPEN_SOURCE 700
+#endif
 
 #include <stdint.h>
 #include <stddef.h>
@@ -33,11 +37,11 @@
 #define FIMS_EXIT_CHANGES 3
 
 /* Default paths relative to working directory (or overridden via config/env) */
-#define FIMS_DEFAULT_BASELINE   "data/baseline.dat"
-#define FIMS_DEFAULT_LOG        "logs/fims.log"
-#define FIMS_DEFAULT_REPORT     "data/last_report.dat"
-#define FIMS_DEFAULT_STATE      "data/status.dat"
-#define FIMS_DEFAULT_CONFIG     "data/fims.conf"
+#define FIMS_DEFAULT_BASELINE   "/var/lib/fims/baseline.dat"
+#define FIMS_DEFAULT_LOG        "/var/log/fims/fims.log"
+#define FIMS_DEFAULT_REPORT     "/var/lib/fims/last_report.dat"
+#define FIMS_DEFAULT_STATE      "/var/lib/fims/status.dat"
+#define FIMS_DEFAULT_CONFIG     "/etc/fims/fims.conf"
 
 /* ============================================================================
  * Safe String & Path Helpers (Bounds-Checked, Zero Truncation Warnings)
@@ -59,7 +63,7 @@ static inline bool fims_str_copy(char *dst, size_t dst_sz, const char *src) {
 }
 
 static inline bool fims_path_join(char *dst, size_t dst_sz, const char *dir, const char *name) {
-    if (!dst || dst_sz == 0 || !dir || !name) return false;
+    if (!dst || dst_sz == 0 || !dir || !name || dir[0] == '\0') return false;
     size_t dlen = strlen(dir);
     while (dlen > 1 && dir[dlen - 1] == '/') {
         dlen--;
