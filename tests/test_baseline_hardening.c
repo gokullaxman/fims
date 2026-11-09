@@ -453,9 +453,77 @@ static void test_item23_multi_root_appending(void) {
     printf("  [PASS] Item 23 verified cleanly.\n");
 }
 
+/* ----------------------------------------------------------------------------
+ * Test Item 10: Baseline serialization and deserialization of unreadable files
+ * ---------------------------------------------------------------------------- */
+static void test_item10_unreadable_file_baseline(void) {
+    printf("[TEST] Item 10: Baseline persistence with unreadable/0000 files...\n");
+
+    char dir_tmpl[] = "/tmp/fims_test_unreadable_base_XXXXXX";
+    char *test_dir = mkdtemp(dir_tmpl);
+    assert(test_dir != NULL);
+
+    char p_readable[FIMS_MAX_PATH];
+    char p_unreadable[FIMS_MAX_PATH];
+    char base_path[FIMS_MAX_PATH];
+
+    snprintf(p_readable, sizeof(p_readable), "%s/readable.txt", test_dir);
+    snprintf(p_unreadable, sizeof(p_unreadable), "%s/secret.dat", test_dir);
+    snprintf(base_path, sizeof(base_path), "%s/baseline.dat", test_dir);
+
+    create_file(p_readable, "Public readable data");
+    create_file(p_unreadable, "Confidential data");
+
+    /* Mark secret.dat as mode 0000 (unreadable) */
+    assert(chmod(p_unreadable, 0000) == 0);
+
+    fims_config_t cfg;
+    fims_config_init_defaults(&cfg);
+    snprintf(cfg.baseline_file, sizeof(cfg.baseline_file), "%s", base_path);
+    cfg.log_file[0] = '\0';
+    fims_config_add_exclude(&cfg, "baseline.dat");
+
+    size_t count = 0;
+    fims_status_t st = fims_baseline_init_from_dir(test_dir, &cfg, false, &count);
+    assert(st == FIMS_OK);
+    assert(count == 2);
+
+    /* Cryptographic baseline validation must pass */
+    assert(fims_baseline_validate(base_path) == FIMS_OK);
+
+    /* Load baseline and verify metadata and unreadable flag */
+    fims_file_list_t loaded;
+    assert(fims_baseline_load(base_path, &loaded) == FIMS_OK);
+    assert(loaded.count == 2);
+
+    bool found_readable = false;
+    bool found_unreadable = false;
+    for (size_t i = 0; i < loaded.count; i++) {
+        if (strcmp(loaded.records[i].path, p_readable) == 0) {
+            found_readable = true;
+            assert(!loaded.records[i].unreadable);
+            assert(strlen(loaded.records[i].sha256) == 64);
+        } else if (strcmp(loaded.records[i].path, p_unreadable) == 0) {
+            found_unreadable = true;
+            assert(loaded.records[i].unreadable);
+            assert(loaded.records[i].sha256[0] == '\0');
+        }
+    }
+    assert(found_readable && found_unreadable);
+    fims_file_list_free(&loaded);
+
+    /* Restore permission for cleanup */
+    chmod(p_unreadable, 0600);
+    unlink(p_readable);
+    unlink(p_unreadable);
+    unlink(base_path);
+    rmdir(test_dir);
+    printf("  [PASS] Item 10 unreadable baseline serialization verified cleanly.\n");
+}
+
 int main(void) {
     printf("============================================================\n");
-    printf(" Executing Baseline Hardening Test Suite (Items 4, 8, 16, 24, 23)\n");
+    printf(" Executing Baseline Hardening Test Suite (Items 4, 8, 16, 24, 23, 10)\n");
     printf("============================================================\n");
 
     test_item4_percent_encoding();
@@ -463,9 +531,10 @@ int main(void) {
     test_item16_safe_writes_and_atomic_replace();
     test_item24_path_traversal_validation();
     test_item23_multi_root_appending();
+    test_item10_unreadable_file_baseline();
 
     printf("============================================================\n");
-    printf(" ALL BASELINE HARDENING TESTS PASSED CLEANLY (5/5)\n");
+    printf(" ALL BASELINE HARDENING TESTS PASSED CLEANLY (6/6)\n");
     printf("============================================================\n");
     return 0;
 }

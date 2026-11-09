@@ -530,7 +530,10 @@ static bool parse_record_line(const char *line, fims_file_record_t *out_rec) {
     }
     fields[9] = p; /* 10th field is the percent-encoded file path */
 
+    /* Item 10: fields 0-7 and 9 must not be empty.
+     * Field 8 (sha256) may be empty for unreadable / inaccessible files */
     for (int i = 0; i < 10; i++) {
+        if (i == 8) continue;
         if (fields[i][0] == '\0') return false;
     }
     if (strchr(fields[9], '\t') != NULL) return false;
@@ -562,8 +565,14 @@ static bool parse_record_line(const char *line, fims_file_record_t *out_rec) {
     out_rec->ctime = (int64_t)strtoll(fields[7], &endptr, 10);
     if (errno != 0 || !endptr || *endptr != '\0') return false;
 
-    if (!is_valid_hex64(fields[8])) return false;
-    fims_str_copy(out_rec->sha256, sizeof(out_rec->sha256), fields[8]);
+    if (fields[8][0] == '\0') {
+        out_rec->sha256[0] = '\0';
+        out_rec->unreadable = true;
+    } else {
+        if (!is_valid_hex64(fields[8])) return false;
+        fims_str_copy(out_rec->sha256, sizeof(out_rec->sha256), fields[8]);
+        out_rec->unreadable = false;
+    }
 
     /* Item 4: Decode percent-encoded path */
     char decoded_path[FIMS_MAX_PATH];
@@ -1015,11 +1024,19 @@ fims_status_t fims_baseline_show(const char *baseline_path) {
     printf("--------------------------------------------------------------------------------\n");
     for (size_t i = 0; i < list.count; i++) {
         const fims_file_record_t *r = &list.records[i];
-        printf(" %04o   %-10llu %.16s... %s\n",
-               r->mode,
-               (unsigned long long)r->size,
-               r->sha256,
-               r->path);
+        if (r->unreadable || r->sha256[0] == '\0') {
+            printf(" %04o   %-10llu %-16s %s\n",
+                   r->mode,
+                   (unsigned long long)r->size,
+                   "[UNREADABLE]",
+                   r->path);
+        } else {
+            printf(" %04o   %-10llu %.16s... %s\n",
+                   r->mode,
+                   (unsigned long long)r->size,
+                   r->sha256,
+                   r->path);
+        }
     }
     printf("================================================================================\n");
 
