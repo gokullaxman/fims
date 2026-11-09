@@ -1,107 +1,161 @@
 # File Integrity Monitoring System (FIMS)
 
-A modular, Linux-native **File Integrity Monitoring System (FIMS)** engineered in ISO C11 using POSIX system calls, the OpenSSL `EVP` cryptographic API (`SHA-256`), `pthread` multithreading, and the Linux `inotify` kernel subsystem.
+A modular, Linux-native **File Integrity Monitoring System (FIMS)** engineered in ISO C11 using POSIX system calls, the OpenSSL `EVP` cryptographic API (`SHA-256` and optional `HMAC-SHA256`), `pthread` multithreading, and the Linux `inotify` kernel subsystem.
+
+---
 
 ## 1. Project Overview & Objectives
 
-FIMS establishes a tamper-evident cryptographic baseline of regular files across monitored directory trees and continuously compares live filesystem state against that trusted baseline. It detects and logs:
+FIMS establishes a tamper-evident cryptographic baseline of regular files across monitored directory trees and continuously compares live filesystem state against that trusted baseline. It detects, records, and audits:
 
 - **`FILE_MODIFIED`**: Cryptographic SHA-256 content digest changes.
-- **`FILE_DELETED`**: Removal of previously baselined files.
+- **`FILE_DELETED`**: Removal of previously baselined files (including entire missing or removed monitored root trees).
 - **`FILE_ADDED`**: Creation of unauthorized or unbaselined regular files.
-- **`FILE_RENAMED`**: Reliably identifiable file moves preserving device ID, inode, size, `mtime`, and SHA-256 digest.
+- **`FILE_RENAMED`**: Reliably identifiable file moves preserving device ID, inode, size, `mtime`, and SHA-256 digest (paired via inotify cookies).
 - **`PERMISSION_CHANGED`**: Modifications to POSIX permission and special mode bits (`07777`, including `setuid`/`setgid`/world-writable escalations).
 - **`SIZE_CHANGED`**: Byte-length variations between baseline and live files.
-- **`METADATA_CHANGED`**: Ownership (`UID`/`GID`) or modification timestamp (`mtime`) changes even when file content remains identical.
+- **`METADATA_CHANGED`**: Ownership (`UID`/`GID`), modification timestamp (`mtime`), change timestamp (`ctime`), or inode updates even when file content remains identical.
+- **`EVENT_UNREADABLE` / `PERMISSION_CHANGED`**: Inaccessible files retaining metadata without falsely reporting `FILE_DELETED`.
 
-## 2. Repository Structure
+---
 
-```text
-fims/
-├── include/
-│   └── fims.h              # Shared constants, status enums, data structures, and safe string/path helpers
-├── src/
-│   ├── main.c              # Entry point delegating to CLI dispatcher
-│   ├── cli.c / cli.h       # Command-line parser and subcommand handlers
-│   ├── config.c / config.h # Configuration manager, exclusion engine, and path traversal sanitizer
-│   ├── logger.c / logger.h # Thread-safe structured alert & operational audit logging engine (mode 0600)
-│   ├── hash.c / hash.h     # Chunked 64 KB streaming SHA-256 generator via OpenSSL EVP API
-│   ├── scanner.c / scanner.h # Recursive POSIX directory scanner with symlink & cycle protection
-│   ├── baseline.c / baseline.h # Self-validating baseline manager with atomic writes & BODY_SHA256 header
-│   ├── integrity.c / integrity.h # Multi-pass baseline vs. live filesystem comparison engine
-│   └── monitor.c / monitor.h # Real-time Linux inotify event loop + periodic pthread consistency scanner
-├── tests/
-│   ├── test_hash.c         # NIST vectors, empty files, 2.66 MB multi-chunk streaming, symlink & EACCES tests
-│   ├── test_scanner.c      # Nested directories, symlink loop prevention, EACCES handling, path traversal tests
-│   ├── test_baseline.c     # 0600 permissions, overwrite protection, corrupt record & header rejection tests
-│   └── test_integrity.c    # Modified/Deleted/Added/Permission/Size/Metadata/Unchanged + real-time monitor tests
-├── data/
-│   └── baseline.dat        # Trusted baseline storage (created at runtime with mode 0600)
-├── logs/
-│   └── fims.log            # Structured security alert & audit log (created at runtime with mode 0600)
-├── Makefile                # Build system (make, make test, make clean)
-├── README.md               # Project documentation
-└── .gitignore              # Git ignore rules
-```
+## 2. Command-Line Interface Reference
 
-## 3. Linux Dependencies & Installation
+### Commands & Subcommands
 
-Install the GCC C compiler, standard C development headers, POSIX threads, and OpenSSL 3.x development libraries:
+- `fims init <directory> [--force]`
+  Scan `<directory>` and create a self-verifying trusted baseline. Rejects overwriting an existing baseline unless `--force` is specified. Flags are accepted in either order (`init <dir> --force` or `init --force <dir>`). Overwriting an existing baseline requires interactive confirmation typing `"yes"` (or unattended automated execution via `--allow-unattended`).
+- `fims init --add <directory>`
+  Add an additional directory root to the existing baseline without discarding existing baselined roots.
+- `fims scan`
+  Perform a complete integrity scan comparing the live filesystem against the trusted baseline.
+- `fims monitor [--duration <sec>]`
+  Start real-time `inotify` monitoring with background `pthread` consistency scans. `--duration` accepts non-negative numeric integers.
+- `fims status`
+  Display monitoring status, daemon PID, heartbeat freshness (< 3x check interval), monitored roots, tracked file count, and last scan timestamp (prints `"never"` if no scan has been executed).
+- `fims report`
+  Display the detailed integrity report from the most recent scan or monitoring session.
+- `fims baseline show`
+  Validate cryptographic integrity and display all header metadata, root directories, and records stored in the trusted baseline.
+- `fims baseline update [--yes] [--allow-unattended]`
+  Run an integrity scan first, print the alert diff count, and update the baseline after confirmation. Requires typing `"yes"` interactively; `--yes` is honored only when combined with `--allow-unattended`.
+- `fims config`
+  Display active configuration parameters, monitored roots (aligned with active baseline contents), and excluded paths.
+- `fims help`
+  Display usage instructions, syntax guide, and exit code reference.
 
-- **Debian / Ubuntu / Kali Linux**:
-  ```bash
-  sudo apt-get update && sudo apt-get install -y build-essential gcc make libssl-dev
-  ```
-- **Fedora / RHEL / Rocky Linux**:
-  ```bash
-  sudo dnf install -y gcc make openssl-devel
-  ```
-- **Arch Linux**:
-  ```bash
-  sudo pacman -S base-devel gcc make openssl
-  ```
+### Scan Exit Codes
 
-## 4. Build & Test Instructions
+The `fims scan` command strictly adheres to deterministic exit codes for CI/CD and SIEM automation:
 
-Compile the `fims` executable with strict compiler flags (`-Wall -Wextra -Werror -pedantic -std=c11 -O2`):
+| Exit Code | Identifier | Description |
+|:---------:|:-----------|:------------|
+| **`0`** | `FIMS_EXIT_OK` | Clean scan: live filesystem perfectly matches baseline; 0 changes detected. |
+| **`1`** | `FIMS_EXIT_ERROR` | Operational or fatal error (e.g. missing arguments, I/O errors, invalid configuration, unreadable paths). |
+| **`2`** | `FIMS_EXIT_CORRUPT` | Baseline corruption or authenticity failure: header mismatch, parsing failure, `BODY_SHA256` digest failure, or missing/invalid HMAC key/digest. |
+| **`3`** | `FIMS_EXIT_CHANGES` | Integrity changes detected: one or more `FILE_MODIFIED`, `FILE_DELETED`, `FILE_ADDED`, `FILE_RENAMED`, `PERMISSION_CHANGED`, `SIZE_CHANGED`, or `METADATA_CHANGED` events identified. |
 
+---
+
+## 3. Configuration & Path Resolution
+
+### Default Paths & Fallback Hierarchy
+
+FIMS uses absolute paths by default rather than depending on the current working directory (`cwd`):
+
+| File Purpose | Root / System Default | Non-Root User Fallback (`~/.local/state/fims`) |
+|:-------------|:----------------------|:----------------------------------------------|
+| **Baseline File** | `/var/lib/fims/baseline.dat` | `~/.local/state/fims/baseline.dat` |
+| **Log File** | `/var/log/fims/fims.log` | `~/.local/state/fims/fims.log` |
+| **Config File** | `/etc/fims/fims.conf` | `~/.local/state/fims/fims.conf` |
+| **Report File** | `/var/lib/fims/last_report.dat` | `~/.local/state/fims/last_report.dat` |
+| **State File** | `/var/lib/fims/status.dat` | `~/.local/state/fims/status.dat` |
+
+### Environment Variable Overrides
+
+All default paths can be explicitly overridden via environment variables:
+
+- `FIMS_BASELINE_PATH`: Custom path to trusted baseline file.
+- `FIMS_LOG_PATH`: Custom path to structured log file.
+- `FIMS_CONFIG_PATH`: Custom path to configuration file.
+- `FIMS_REPORT_PATH`: Custom path to last report file.
+- `FIMS_STATE_PATH`: Custom path to daemon state file.
+- `FIMS_HMAC_KEY_FILE`: Absolute path to the HMAC-SHA256 secret key file.
+
+### Ownership & Permission Hardening
+
+To prevent local privilege escalation:
+- Configuration and baseline files must be owned by the current user or `root`.
+- FIMS refuses to load any configuration or baseline file that is group-writable (`0020`) or world-writable (`0002`).
+- Operational log files and baseline files are created with strict `0600` permissions.
+
+---
+
+## 4. Exclusion Engine & Semantics
+
+FIMS implements strict exclusion semantics to prevent false positives and eliminate evasion vulnerabilities:
+
+1. **Absolute Path Canonicalization**:
+   All exclusion rules specified relatively in configuration or CLI arguments are resolved to canonical absolute paths relative to `cwd` upon ingestion.
+2. **Boundary Prefix Matching (`/`)**:
+   Exclusions match either exact paths or directory prefixes strictly bounded by `/`. For example, `/var/log` matches `/var/log` and `/var/log/app.log`, but does **not** match `/var/log-backup`.
+3. **Automatic Self-Exclusion**:
+   FIMS automatically excludes its own operational files: `cfg->baseline_file`, `cfg->log_file`, `cfg->report_file`, `cfg->state_file`, `cfg->config_file`, and temporary baseline staging files (`<baseline>.tmp.*`).
+4. **Subdirectory `.git` Monitoring**:
+   Basename-only exclusion for `.git` is eliminated. A `.git` folder located inside a monitored directory tree is monitored by default.
+5. **Pattern Exclusions (`exclude_glob`)**:
+   To exclude files by pattern across the entire tree, use the explicit configuration directive:
+   ```ini
+   exclude_glob = **/.git/**
+   exclude_glob = *.tmp
+   ```
+
+---
+
+## 5. Security Architecture & Baseline Authenticity
+
+### Built-in Security Controls
+
+1. **OpenSSL EVP Cryptography**: Uses streaming 64 KB heap buffers with `EVP_DigestInit_ex`, `EVP_DigestUpdate`, and `EVP_DigestFinal_ex` for chunked SHA-256 calculation. Full files are never buffered into memory.
+2. **Symlink & TOCTOU Hardening**: File opening uses `O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK` followed by `fstat` on the opened file descriptor to prevent FIFO hangs and TOCTOU directory swap attacks.
+3. **Log & Report Injection Defense**: All user-controlled strings, file paths, and event descriptions are sanitized through a unified escaping helper converting control characters (`< 0x20`, `0x7f`), quotes (`"`), backslashes (`\`), and ANSI escape sequences into `\xNN` representations.
+4. **Atomic Baseline Writes**: Baseline serialization writes to a temporary file created with `O_EXCL | O_CREAT` (mode `0600`), validates write return codes, flushes and `fsync`s the file descriptor, atomically replaces the target via `rename()`, and `fsync`s the parent directory.
+5. **Read-Only Observer Discipline**: FIMS never modifies, deletes, or executes monitored files, and never silently updates the baseline upon detecting changes.
+
+### Baseline Authenticity & HMAC-SHA256
+
+Baseline files include all header metadata (`CREATED_AT`, `RECORD_COUNT`, `ROOT_DIR`) and all serialized record lines within the cryptographic digest computation.
+
+FIMS supports an optional **HMAC-SHA256** baseline authenticity mechanism enabled via `FIMS_HMAC_KEY_FILE`:
+- The key file specified by `FIMS_HMAC_KEY_FILE` must have mode `0600` and be owned exclusively by the current user or `root`.
+- When configured, a baseline missing an `HMAC_SHA256` header or failing HMAC validation is rejected with `FIMS_ERR_CORRUPT` (exit code `2`).
+
+> **CRITICAL SECURITY NOTICE**:
+> **WITHOUT an HMAC key file (`FIMS_HMAC_KEY_FILE`), the baseline checksum (`BODY_SHA256`) detects ACCIDENTAL CORRUPTION ONLY, NOT MALICIOUS TAMPERING.**
+> An adversary with write permissions to the baseline file can recalculate and overwrite the `BODY_SHA256` digest header. True tamper resistance against adversaries with filesystem access requires an out-of-band protected key (`FIMS_HMAC_KEY_FILE`), an append-only filesystem (`chattr +i` / `+a`), or storing the baseline on read-only media.
+
+---
+
+## 6. Build & Test Instructions
+
+### Build
 ```bash
 make
 ```
 
-Run the automated 4-binary test suite covering all 12 functional and security test requirements:
-
+### Run Tests
 ```bash
 make test
 ```
 
-Clean compiled binaries, object files, and temporary runtime state:
+### Run Tests under AddressSanitizer and UndefinedBehaviorSanitizer
+```bash
+make clean
+make CFLAGS="-Wall -Wextra -Werror -pedantic -std=c11 -O2 -Iinclude -fsanitize=address,undefined" test
+```
 
+### Clean
 ```bash
 make clean
 ```
-
-## 5. Command-Line Interface Reference
-
-- `fims init /path/to/directory` — Scan target directory and create a self-verifying trusted baseline in `data/baseline.dat`.
-- `fims scan` — Perform a full integrity scan comparing the live filesystem against the trusted baseline.
-- `fims monitor [--duration <sec>]` — Start real-time `inotify` monitoring with background `pthread` consistency scans.
-- `fims status` — Display baseline verification status, tracked file counts, and monitoring metrics.
-- `fims report` — Display the detailed integrity report from the most recent scan or monitoring session.
-- `fims baseline show` — Validate and display all records stored in the trusted baseline.
-- `fims baseline update [--yes]` — Re-scan monitored directories and update the baseline after explicit user confirmation.
-- `fims config` — Display active configuration parameters, monitored roots, and excluded paths.
-- `fims help` — Display usage instructions.
-
-## 6. Security Architecture & Limitations
-
-### Built-in Security Controls
-1. **Cryptographic Hashing (`OpenSSL EVP`)**: Uses `EVP_DigestInit_ex`, `EVP_DigestUpdate`, and `EVP_DigestFinal_ex` with `EVP_sha256()` over fixed 64 KB heap buffers. Entire files are never loaded into memory.
-2. **Symlink & TOCTOU Hardening**: Directory traversal uses `lstat()` to identify and skip symbolic links without dereferencing them. Regular files, baseline files, and logs are opened with `O_NOFOLLOW | O_CLOEXEC`.
-3. **Baseline Self-Integrity (`BODY_SHA256`)**: `data/baseline.dat` stores a cryptographic SHA-256 digest of all serialized record lines in its header and writes updates atomically via temporary files (`0600` permissions). Any unauthorized edit or corruption of `baseline.dat` is rejected with `FIMS_ERR_CORRUPT`.
-4. **Never Mutates Monitored Files**: FIMS operates strictly as a read-only observer on monitored directories—it never executes, deletes, quarantines, or modifies monitored files, and never silently updates the baseline after detecting anomalies.
-5. **Integrity Change vs. Malicious Activity**: FIMS reports objective integrity deviations (`FILE_MODIFIED`, `PERMISSION_CHANGED`, etc.) so analysts can correlate authorized maintenance windows against unauthorized intrusion activity.
-
-### Documented Operational Limitations
-- **Root Privileges & Kernel-Level Evasion**: When run as an unprivileged user, FIMS cannot hash files owned by `root` with `0000`/`0600` permissions (these are safely counted and logged as skipped). Conversely, an adversary who achieves `root` (`CAP_SYS_ADMIN`) compromise on the same host could modify both the monitored files and `data/baseline.dat` unless `baseline.dat` is stored on read-only media, an append-only filesystem (`chattr +i` / `+a`), or shipped off-host via remote syslog.
-- **Filesystem TOCTOU Races**: Between an `inotify` event notification and the subsequent `open()`/`read()` hash calculation, a rapidly mutating process may modify or unlink a file. FIMS mitigates transient races by combining real-time `inotify` watches (`IN_CLOSE_WRITE`, `IN_MODIFY`, `IN_ATTRIB`, `IN_MOVED_*`, `IN_Q_OVERFLOW`) with a periodic full-tree consistency scan thread.
+=== END FILE: README.md ===
