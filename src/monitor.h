@@ -14,6 +14,7 @@ typedef struct {
     size_t   realtime_alerts_emitted;
     size_t   overflow_recoveries;
     size_t   periodic_scans_completed;
+    size_t   watch_failures;              /* Item 13: inotify watch failure counter */
     bool     monitor_active;
 } fims_monitor_stats_t;
 
