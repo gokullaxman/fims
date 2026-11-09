@@ -1,10 +1,9 @@
 #include "escape.h"
-#include <string.h>
+#include <stdbool.h>
+#include <stdint.h>
 
-/**
- * Stub implementation of fims_escape_for_log that performs a simple copy
- * to ensure linking succeeds during early integration phases.
- */
+static const char hex_digits[] = "0123456789abcdef";
+
 size_t fims_escape_for_log(const char *in, char *out, size_t out_sz) {
     if (!in) {
         if (out && out_sz > 0) {
@@ -13,11 +12,40 @@ size_t fims_escape_for_log(const char *in, char *out, size_t out_sz) {
         return 0;
     }
 
-    size_t in_len = strlen(in);
-    if (out && out_sz > 0) {
-        size_t copy_len = (in_len < out_sz - 1) ? in_len : (out_sz - 1);
-        memcpy(out, in, copy_len);
-        out[copy_len] = '\0';
+    size_t total_len = 0;
+    size_t out_idx = 0;
+
+    for (const char *p = in; *p != '\0'; p++) {
+        unsigned char uc = (unsigned char)*p;
+        bool escape = false;
+        if (uc == '"' || uc == '\\' || uc < 0x20 || uc == 0x7f) {
+            escape = true;
+        }
+
+        if (escape) {
+            char seq[4];
+            seq[0] = '\\';
+            seq[1] = 'x';
+            seq[2] = hex_digits[(uc >> 4) & 0x0f];
+            seq[3] = hex_digits[uc & 0x0f];
+
+            for (int i = 0; i < 4; i++) {
+                if (out && out_sz > 0 && out_idx + 1 < out_sz) {
+                    out[out_idx++] = seq[i];
+                }
+                total_len++;
+            }
+        } else {
+            if (out && out_sz > 0 && out_idx + 1 < out_sz) {
+                out[out_idx++] = (char)uc;
+            }
+            total_len++;
+        }
     }
-    return in_len;
+
+    if (out && out_sz > 0) {
+        out[out_idx] = '\0';
+    }
+
+    return total_len;
 }
